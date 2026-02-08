@@ -3,10 +3,10 @@
 ## Online Examination and Proctoring System (OEPS)
 
 **Document Version:** 1.0  
-**Prepared By:** Sumit Kumar ***[Team Dexter]***
-**Course:** B.Tech – Software Engineering  
-**Institute:** Graphic Era University, Dehradun 
-**Academic Year:** 2026
+**Prepared By:** Sumit Kumar **[Team Dexter]**  
+**Course:** B.Tech – Software Engineering    
+**Institute:** Graphic Era University, Dehradun   
+**Academic Year:** 2026    
 
 ---
 
