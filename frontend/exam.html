@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Take your assigned OEPS exam with auto-save and proctoring support.">
+    <title>Exam — OEPS</title>
+    <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body oncontextmenu="return false;">
+    <div class="exam-layout">
+        <main class="question-area animate-in">
+            <div class="exam-header">
+                <div class="flex flex-col gap-sm">
+                    <span class="eyebrow">Active attempt</span>
+                    <h1 id="exam-title" class="panel-title">Loading...</h1>
+                    <p id="exam-instructions" class="panel-copy"></p>
+                </div>
+                <div class="flex flex-col gap-sm items-center">
+                    <span class="badge badge-info" id="question-count">— Questions</span>
+                    <p class="helper-text">Answers save automatically while you work.</p>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="exam-progress"></div>
+            </div>
+
+            <form id="exam-form">
+                <div id="questions-container" class="question-list"></div>
+            </form>
+        </main>
+
+        <aside class="exam-sidebar animate-in">
+            <section class="card status-card">
+                <div class="section-title mb-1">Time Remaining</div>
+                <div id="timer" class="timer">--:--</div>
+                <p class="helper-text mt-1">The timer is based on your recorded attempt start time.</p>
+            </section>
+
+            <section class="card status-card">
+                <button id="submit-btn" class="btn btn-primary btn-full btn-lg">Submit exam</button>
+                <div class="mt-2">
+                    <div class="status-row">
+                        <span id="connection-dot" class="connection-indicator"></span>
+                        <span id="connection-status" class="text-sm">Connected</span>
+                    </div>
+                    <div id="save-status" class="save-status">All changes saved</div>
+                </div>
+            </section>
+
+            <section class="card status-card">
+                <div class="section-title mb-1">Session Rules</div>
+                <ul class="rule-list">
+                    <li>Keep this window open until you submit.</li>
+                    <li>Switching tabs or windows is monitored.</li>
+                    <li>Review unanswered questions before finishing.</li>
+                </ul>
+            </section>
+
+            <section class="card status-card">
+                <div class="section-title mb-1">Question Navigator</div>
+                <div id="question-nav" class="question-nav"></div>
+            </section>
+        </aside>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+    <script type="module" src="/src/scripts/exam.ts"></script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="OEPS dashboard for managing exams, users, results, and reports.">
+    <title>Dashboard — OEPS</title>
+  <script type="module" crossorigin src="/assets/dashboard-wvK7MVLn.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-CF-FJpsQ.js">
+  <link rel="modulepreload" crossorigin href="/assets/api-eNSiWK_x.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-DfUMrStV.css">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-mark brand-mark-sm">OE</div>
+                <div>
+                    <p class="eyebrow">Assessment ops</p>
+                    <h2>OEPS</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-user" id="user-info-card">
+                <div class="sidebar-user-avatar" id="user-avatar">?</div>
+                <div class="sidebar-user-info">
+                    <div class="sidebar-user-name" id="user-name">Loading...</div>
+                    <div class="sidebar-user-role" id="user-role">—</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-link active" data-view="exams" id="nav-exams">
+                    <span class="nav-icon">EX</span>
+                    <span>Exams</span>
+                </a>
+                <a href="#" class="nav-link" data-view="results" id="nav-results">
+                    <span class="nav-icon">RS</span>
+                    <span>Results</span>
+                </a>
+
+                <div id="admin-nav" class="hidden">
+                    <div class="section-title mt-2 mb-1">Administration</div>
+                    <div class="sidebar-nav">
+                        <a href="#" class="nav-link" data-view="users" id="nav-users">
+                            <span class="nav-icon">US</span>
+                            <span>Users</span>
+                        </a>
+                        <a href="#" class="nav-link" data-view="questions" id="nav-questions">
+                            <span class="nav-icon">QB</span>
+                            <span>Question Bank</span>
+                        </a>
+                        <a href="#" class="nav-link" data-view="reports" id="nav-reports">
+                            <span class="nav-icon">RP</span>
+                            <span>Reports</span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="logout-btn" class="btn btn-ghost btn-full">Log out</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <section class="card view-panel dashboard-overview animate-slide-up">
+                <div class="flex flex-col gap-sm">
+                    <span class="eyebrow">Workspace</span>
+                    <h1 class="panel-title">Exam operations made simpler</h1>
+                    <p class="panel-copy">
+                        Manage exam setup, student activity, and reporting from a quieter, more focused dashboard.
+                    </p>
+                </div>
+                <p class="helper-text">
+                    Actions update based on your role, so students see only what they need and staff keep admin tools nearby.
+                </p>
+            </section>
+
+            <div id="stats-bar" class="stats-grid hidden"></div>
+
+            <section id="view-exams" class="view-panel">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Exams</span>
+                        <h2 class="panel-title">Scheduled and active exams</h2>
+                    </div>
+                    <div id="admin-controls" class="hidden flex gap-sm">
+                        <button id="create-exam-btn" class="btn btn-primary">Create exam</button>
+                    </div>
+                </div>
+                <div id="exam-list" class="exam-grid stagger">
+                    <div class="skeleton skeleton-card"></div>
+                    <div class="skeleton skeleton-card"></div>
+                    <div class="skeleton skeleton-card"></div>
+                </div>
+            </section>
+
+            <section id="view-results" class="view-panel hidden">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Results</span>
+                        <h2 class="panel-title">Attempt history and outcomes</h2>
+                    </div>
+                </div>
+                <div id="results-list" class="stack-list"></div>
+            </section>
+
+            <section id="view-users" class="view-panel hidden">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Users</span>
+                        <h2 class="panel-title">Manage access and roles</h2>
+                    </div>
+                    <button id="create-user-btn" class="btn btn-primary">Add user</button>
+                </div>
+                <div class="card table-card">
+                    <table class="data-table" id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="view-questions" class="view-panel hidden">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Question Bank</span>
+                        <h2 class="panel-title">Reusable questions and scoring</h2>
+                    </div>
+                    <button id="create-question-btn" class="btn btn-primary">Add question</button>
+                </div>
+                <div id="questions-list" class="stack-list"></div>
+            </section>
+
+            <section id="view-reports" class="view-panel hidden">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Reports</span>
+                        <h2 class="panel-title">Exam activity and performance</h2>
+                    </div>
+                </div>
+                <div id="reports-content" class="stack-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="exam-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="exam-modal-title">Create Exam</h3>
+                <button class="modal-close" data-close-modal="exam-modal" aria-label="Close exam modal">×</button>
+            </div>
+            <form id="exam-form">
+                <div class="input-group">
+                    <label class="label" for="exam-title">Title</label>
+                    <input type="text" id="exam-title" class="input" required placeholder="Midterm examination">
+                </div>
+                <div class="input-group">
+                    <label class="label" for="exam-instructions">Instructions</label>
+                    <textarea id="exam-instructions" class="textarea" rows="3" placeholder="Exam rules and guidelines"></textarea>
+                </div>
+                <div class="flex gap-sm">
+                    <div class="input-group w-full">
+                        <label class="label" for="exam-duration">Duration (minutes)</label>
+                        <input type="number" id="exam-duration" class="input" required min="1" value="60">
+                    </div>
+                    <div class="input-group w-full">
+                        <label class="label" for="exam-status">Status</label>
+                        <select id="exam-status" class="select">
+                            <option value="DRAFT">Draft</option>
+                            <option value="SCHEDULED">Scheduled</option>
+                            <option value="LIVE">Live</option>
+                            <option value="CLOSED">Closed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="exam-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="exam-submit-btn">Create Exam</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="user-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="user-modal-title">Add User</h3>
+                <button class="modal-close" data-close-modal="user-modal" aria-label="Close user modal">×</button>
+            </div>
+            <form id="user-form">
+                <div class="input-group">
+                    <label class="label" for="user-name-input">Full name</label>
+                    <input type="text" id="user-name-input" class="input" required placeholder="John Doe">
+                </div>
+                <div class="input-group">
+                    <label class="label" for="user-email-input">Email</label>
+                    <input type="email" id="user-email-input" class="input" required placeholder="john@example.com">
+                </div>
+                <div class="input-group">
+                    <label class="label" for="user-password-input">Password</label>
+                    <input type="password" id="user-password-input" class="input" placeholder="Minimum 6 characters">
+                </div>
+                <div class="input-group">
+                    <label class="label" for="user-role-input">Role</label>
+                    <select id="user-role-input" class="select">
+                        <option value="student">Student</option>
+                        <option value="examiner">Examiner</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="user-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="user-submit-btn">Add User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="question-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="question-modal-title">Add Question</h3>
+                <button class="modal-close" data-close-modal="question-modal" aria-label="Close question modal">×</button>
+            </div>
+            <form id="question-form">
+                <div class="input-group">
+                    <label class="label" for="q-type">Type</label>
+                    <select id="q-type" class="select">
+                        <option value="MCQ">Multiple Choice</option>
+                        <option value="SUBJECTIVE">Subjective</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="q-prompt">Question</label>
+                    <textarea id="q-prompt" class="textarea" rows="3" required placeholder="Enter the question"></textarea>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="q-marks">Marks</label>
+                    <input type="number" id="q-marks" class="input" min="1" value="1">
+                </div>
+                <div id="mcq-options-section">
+                    <div class="section-title mb-1">Options</div>
+                    <div id="mcq-options-list">
+                        <div class="input-group"><input type="text" class="input mcq-option" placeholder="Option A"></div>
+                        <div class="input-group"><input type="text" class="input mcq-option" placeholder="Option B"></div>
+                        <div class="input-group"><input type="text" class="input mcq-option" placeholder="Option C"></div>
+                        <div class="input-group"><input type="text" class="input mcq-option" placeholder="Option D"></div>
+                    </div>
+                    <div class="input-group">
+                        <label class="label" for="q-correct">Correct answer</label>
+                        <input type="text" id="q-correct" class="input" placeholder="Enter the correct option text">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="question-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="question-submit-btn">Add Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="exam-detail-modal" class="modal-overlay">
+        <div class="modal" style="max-width: 760px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="exam-detail-title">Exam Details</h3>
+                <button class="modal-close" data-close-modal="exam-detail-modal" aria-label="Close exam detail modal">×</button>
+            </div>
+            <div id="exam-detail-content"></div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+</body>
+</html>

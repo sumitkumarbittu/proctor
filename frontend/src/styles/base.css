@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: light;
+
+  --bg-primary: #eef3ee;
+  --bg-secondary: rgba(255, 255, 255, 0.84);
+  --bg-surface: #ffffff;
+  --bg-muted: #e5ece4;
+  --bg-subtle: #f7faf6;
+  --bg-strong: #16324c;
+
+  --accent-blue: #2563eb;
+  --accent-blue-strong: #1d4ed8;
+  --accent-blue-soft: rgba(37, 99, 235, 0.12);
+  --accent-teal: #0f766e;
+  --accent-teal-soft: rgba(15, 118, 110, 0.12);
+  --accent-green: #15803d;
+  --accent-green-soft: rgba(21, 128, 61, 0.14);
+  --accent-amber: #d97706;
+  --accent-amber-soft: rgba(217, 119, 6, 0.14);
+  --accent-red: #dc2626;
+  --accent-red-soft: rgba(220, 38, 38, 0.12);
+  --accent-slate: #64748b;
+
+  --gradient-primary: linear-gradient(135deg, #2563eb 0%, #0f766e 100%);
+  --gradient-success: linear-gradient(135deg, #15803d 0%, #0f766e 100%);
+  --gradient-danger: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
+  --gradient-warm: linear-gradient(135deg, #d97706 0%, #ea580c 100%);
+  --gradient-surface:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 247, 0.94) 100%);
+
+  --text-primary: #152232;
+  --text-secondary: #445468;
+  --text-muted: #6d7d8f;
+  --text-inverse: #f8fbff;
+
+  --border-color: rgba(21, 34, 50, 0.1);
+  --border-strong: rgba(37, 99, 235, 0.18);
+  --border-muted: rgba(21, 34, 50, 0.06);
+
+  --shadow-sm: 0 12px 30px rgba(24, 39, 64, 0.08);
+  --shadow-md: 0 20px 44px rgba(24, 39, 64, 0.12);
+  --shadow-lg: 0 32px 64px rgba(24, 39, 64, 0.14);
+  --shadow-focus: 0 0 0 4px rgba(37, 99, 235, 0.14);
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --radius-full: 999px;
+
+  --transition-fast: 150ms ease;
+  --transition-base: 220ms ease;
+  --transition-slow: 320ms ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  min-height: 100%;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  font-family: 'Manrope', 'Segoe UI', sans-serif;
+  color: var(--text-primary);
+  line-height: 1.6;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.12), transparent 32%),
+    linear-gradient(180deg, #f7faf5 0%, #eef3ee 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(20px);
+}
+
+body::before {
+  top: -10rem;
+  right: -4rem;
+  width: 24rem;
+  height: 24rem;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+body::after {
+  bottom: -12rem;
+  left: -6rem;
+  width: 26rem;
+  height: 26rem;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+a {
+  color: var(--accent-blue);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--accent-blue-strong);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.18);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(68, 84, 104, 0.22);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(68, 84, 104, 0.34);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}

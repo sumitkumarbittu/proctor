@@ -1,0 +1,223 @@
+graph TD
+    %% ============================================
+    %% PROJECT ROOT
+    %% ============================================
+    project-root["🏗️ OEPS<br/>Online Examination &amp; Proctoring System"]
+
+    %% ============================================
+    %% TOP-LEVEL MODULES
+    %% ============================================
+    module-backend["⚙️ Backend<br/>FastAPI + Python 3.11"]
+    module-frontend["🖥️ Frontend<br/>Vite + TypeScript"]
+    module-database["🗄️ Database<br/>PostgreSQL 15"]
+    config-docker["🐳 Docker Compose<br/>Orchestration"]
+
+    project-root -->|contains| module-backend
+    project-root -->|contains| module-frontend
+    project-root -->|contains| module-database
+    project-root -->|contains| config-docker
+    module-backend -->|depends_on| module-database
+    module-frontend -->|depends_on| module-backend
+
+    %% ============================================
+    %% BACKEND CORE
+    %% ============================================
+    service-entrypoint["📍 main.py<br/>App Entry Point"]
+    config-settings["⚙️ config.py<br/>Settings"]
+    service-security["🔐 security.py<br/>JWT + Bcrypt"]
+    service-deps["🛡️ deps.py<br/>Auth Guards"]
+
+    module-backend -->|contains| service-entrypoint
+    module-backend -->|contains| config-settings
+    module-backend -->|contains| service-security
+    module-backend -->|contains| service-deps
+
+    service-entrypoint -->|depends_on| config-settings
+    service-deps -->|uses| service-security
+
+    %% ============================================
+    %% BACKEND API ROUTES
+    %% ============================================
+    feature-api-router["🌐 API v1 Router<br/>/api/v1"]
+    feature-auth-api["🔑 Auth API<br/>/auth/login"]
+    feature-users-api["👥 Users API<br/>/users"]
+    feature-exams-api["📝 Exams API<br/>/exams + /questions"]
+    feature-attempts-api["🎯 Attempts API<br/>/attempts"]
+    feature-reports-api["📊 Reports API<br/>/reports"]
+
+    service-entrypoint -->|uses| feature-api-router
+    feature-api-router -->|contains| feature-auth-api
+    feature-api-router -->|contains| feature-users-api
+    feature-api-router -->|contains| feature-exams-api
+    feature-api-router -->|contains| feature-attempts-api
+    feature-api-router -->|contains| feature-reports-api
+
+    feature-auth-api -->|uses| service-security
+    feature-users-api -->|uses| service-deps
+    feature-exams-api -->|uses| service-deps
+    feature-attempts-api -->|uses| service-deps
+    feature-reports-api -->|uses| service-deps
+
+    %% ============================================
+    %% BACKEND DATA MODELS
+    %% ============================================
+    model-user["👤 User Model<br/>users table"]
+    model-exam["📋 Exam Model<br/>exams table"]
+    model-question["❓ Question Model<br/>questions table"]
+    model-exam-question["🔗 ExamQuestion<br/>exam_questions table"]
+    model-assignment["📌 Assignment<br/>assignments table"]
+    model-attempt["🎯 Attempt Model<br/>attempts table"]
+    model-response["✍️ Response Model<br/>responses table"]
+    model-proctoring-log["👁️ ProctoringLog<br/>proctoring_logs table"]
+    model-result["🏆 Result Model<br/>results table"]
+
+    module-backend -->|contains| model-user
+    module-backend -->|contains| model-exam
+    module-backend -->|contains| model-question
+    module-backend -->|contains| model-exam-question
+    module-backend -->|contains| model-assignment
+    module-backend -->|contains| model-attempt
+    module-backend -->|contains| model-response
+    module-backend -->|contains| model-proctoring-log
+    module-backend -->|contains| model-result
+
+    %% Model Relationships
+    model-user -->|related_to| model-exam
+    model-user -->|related_to| model-assignment
+    model-user -->|related_to| model-attempt
+    model-exam -->|contains| model-exam-question
+    model-question -->|related_to| model-exam-question
+    model-attempt -->|contains| model-response
+    model-attempt -->|contains| model-proctoring-log
+    model-attempt -->|contains| model-result
+
+    %% API → Model connections
+    feature-auth-api -->|reads_from| model-user
+    feature-users-api -->|reads_from| model-user
+    feature-exams-api -->|reads_from| model-exam
+    feature-exams-api -->|reads_from| model-question
+    feature-exams-api -->|writes_to| model-exam-question
+    feature-attempts-api -->|writes_to| model-attempt
+    feature-attempts-api -->|writes_to| model-response
+    feature-attempts-api -->|writes_to| model-proctoring-log
+    feature-attempts-api -->|writes_to| model-result
+    feature-reports-api -->|reads_from| model-attempt
+    feature-reports-api -->|reads_from| model-result
+
+    %% ============================================
+    %% BACKEND DATA ACCESS & SCHEMAS
+    %% ============================================
+    service-db-session["💾 DB Session<br/>AsyncSessionLocal"]
+    service-migrations["📦 Alembic<br/>Migrations"]
+    feature-schemas["📐 Pydantic Schemas<br/>Request/Response"]
+
+    module-backend -->|contains| service-db-session
+    module-backend -->|contains| service-migrations
+    module-backend -->|contains| feature-schemas
+    service-db-session -->|depends_on| config-settings
+    service-migrations -->|uses| service-db-session
+
+    %% ============================================
+    %% BACKEND INFRASTRUCTURE
+    %% ============================================
+    utility-startup["🚀 start.sh<br/>Startup Script"]
+    utility-superuser["👑 create_superuser.py<br/>Admin Seeder"]
+    feature-testing["🧪 Test Suite<br/>Pytest (minimal)"]
+
+    module-backend -->|contains| utility-startup
+    module-backend -->|contains| utility-superuser
+    module-backend -->|contains| feature-testing
+    utility-startup -->|uses| service-migrations
+    utility-startup -->|uses| utility-superuser
+
+    %% ============================================
+    %% FRONTEND SCREENS
+    %% ============================================
+    screen-login["🔐 Login Screen<br/>index.html"]
+    screen-dashboard["📊 Dashboard Screen<br/>dashboard.html"]
+    screen-exam["📝 Exam Screen<br/>exam.html"]
+    screen-result["🏆 Result Screen<br/>result.html"]
+
+    module-frontend -->|contains| screen-login
+    module-frontend -->|contains| screen-dashboard
+    module-frontend -->|contains| screen-exam
+    module-frontend -->|contains| screen-result
+
+    %% Navigation Flow
+    screen-login -->|navigates_to| screen-dashboard
+    screen-dashboard -->|navigates_to| screen-exam
+    screen-exam -->|navigates_to| screen-result
+
+    %% Screen → API dependencies
+    screen-login -->|depends_on| feature-auth-api
+    screen-dashboard -->|depends_on| feature-users-api
+    screen-dashboard -->|depends_on| feature-exams-api
+    screen-exam -->|depends_on| feature-attempts-api
+    screen-exam -->|depends_on| feature-exams-api
+    screen-result -->|depends_on| feature-attempts-api
+
+    %% ============================================
+    %% FRONTEND SERVICES & COMPONENTS
+    %% ============================================
+    component-api-client["📡 API Client<br/>apiFetch wrapper"]
+    component-proctor["👁️ Proctor Class<br/>Browser Monitoring"]
+    component-utils["🔧 Utils<br/>Token, Time, Debounce"]
+    component-css-design["🎨 CSS Design System<br/>Variables + Components"]
+    config-nginx["🔀 Nginx<br/>Reverse Proxy"]
+
+    module-frontend -->|contains| component-api-client
+    module-frontend -->|contains| component-proctor
+    module-frontend -->|contains| component-utils
+    module-frontend -->|contains| component-css-design
+    module-frontend -->|contains| config-nginx
+
+    component-api-client -->|uses| component-utils
+    screen-exam -->|uses| component-proctor
+    component-proctor -->|depends_on| feature-attempts-api
+    config-nginx -->|configures| module-backend
+
+    %% ============================================
+    %% CROSS-CUTTING FLOWS
+    %% ============================================
+    flow-auth["🔄 Auth Flow<br/>Login → JWT → Guards"]
+    flow-exam-lifecycle["🔄 Exam Lifecycle<br/>Create → Attempt → Evaluate"]
+    flow-proctoring["🔄 Proctoring Flow<br/>Monitor → Log → Store"]
+
+    project-root -->|contains| flow-auth
+    project-root -->|contains| flow-exam-lifecycle
+    project-root -->|contains| flow-proctoring
+
+    flow-auth -->|related_to| screen-login
+    flow-auth -->|related_to| service-security
+    flow-auth -->|related_to| service-deps
+    flow-exam-lifecycle -->|related_to| feature-exams-api
+    flow-exam-lifecycle -->|related_to| feature-attempts-api
+    flow-proctoring -->|related_to| component-proctor
+    flow-proctoring -->|related_to| model-proctoring-log
+
+    %% ============================================
+    %% STYLING
+    %% ============================================
+    classDef project fill:#1e293b,stroke:#334155,color:#f8fafc,stroke-width:3px
+    classDef module fill:#1e40af,stroke:#1d4ed8,color:#ffffff,stroke-width:2px
+    classDef feature fill:#059669,stroke:#047857,color:#ffffff
+    classDef model fill:#7c3aed,stroke:#6d28d9,color:#ffffff
+    classDef screen fill:#ea580c,stroke:#c2410c,color:#ffffff
+    classDef service fill:#0284c7,stroke:#0369a1,color:#ffffff
+    classDef config fill:#64748b,stroke:#475569,color:#ffffff
+    classDef flow fill:#db2777,stroke:#be185d,color:#ffffff
+    classDef utility fill:#65a30d,stroke:#4d7c0f,color:#ffffff
+    classDef theme fill:#d97706,stroke:#b45309,color:#ffffff
+    classDef incomplete fill:#6b7280,stroke:#4b5563,color:#ffffff,stroke-dasharray: 5 5
+
+    class project-root project
+    class module-backend,module-frontend,module-database module
+    class feature-api-router,feature-auth-api,feature-users-api,feature-exams-api,feature-attempts-api,feature-reports-api,feature-schemas feature
+    class model-user,model-exam,model-question,model-exam-question,model-assignment,model-attempt,model-response,model-proctoring-log,model-result model
+    class screen-login,screen-dashboard,screen-exam,screen-result screen
+    class service-entrypoint,service-security,service-deps,service-db-session,service-migrations service
+    class config-docker,config-settings,config-nginx config
+    class flow-auth,flow-exam-lifecycle,flow-proctoring flow
+    class utility-startup,utility-superuser,component-api-client,component-proctor,component-utils utility
+    class component-css-design theme
+    class feature-testing incomplete

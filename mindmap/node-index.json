@@ -1,0 +1,266 @@
+{
+  "project-root": {
+    "title": "OEPS",
+    "type": "project",
+    "files": ["docker-compose.yml", ".env.example", "README.md", "SRS.md", "LICENSE"],
+    "tags": ["project", "fullstack", "docker"]
+  },
+  "module-backend": {
+    "title": "Backend (FastAPI)",
+    "type": "module",
+    "files": ["backend/Dockerfile", "backend/requirements.txt", "backend/alembic.ini"],
+    "tags": ["backend", "python", "fastapi", "async"]
+  },
+  "module-frontend": {
+    "title": "Frontend (Vite + TypeScript)",
+    "type": "module",
+    "files": ["frontend/Dockerfile", "frontend/package.json", "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/nginx.conf"],
+    "tags": ["frontend", "typescript", "vite", "nginx"]
+  },
+  "module-database": {
+    "title": "Database (PostgreSQL 15)",
+    "type": "module",
+    "files": ["docker-compose.yml"],
+    "tags": ["database", "postgresql", "docker"]
+  },
+  "config-docker": {
+    "title": "Docker Compose Orchestration",
+    "type": "config",
+    "files": ["docker-compose.yml", "backend/Dockerfile", "frontend/Dockerfile"],
+    "tags": ["docker", "devops", "config"]
+  },
+  "service-entrypoint": {
+    "title": "App Entry Point (main.py)",
+    "type": "service",
+    "files": ["backend/app/main.py"],
+    "tags": ["entrypoint", "fastapi", "cors"]
+  },
+  "config-settings": {
+    "title": "Settings & Configuration",
+    "type": "config",
+    "files": ["backend/app/core/config.py", ".env.example"],
+    "tags": ["config", "pydantic", "env"]
+  },
+  "service-security": {
+    "title": "Security Module",
+    "type": "service",
+    "files": ["backend/app/core/security.py"],
+    "tags": ["security", "jwt", "bcrypt", "auth"]
+  },
+  "service-deps": {
+    "title": "API Dependencies (Auth Guards)",
+    "type": "service",
+    "files": ["backend/app/api/deps.py"],
+    "tags": ["auth", "dependency-injection", "rbac"]
+  },
+  "service-db-session": {
+    "title": "Database Session Manager",
+    "type": "service",
+    "files": ["backend/app/db/session.py", "backend/app/db/base_class.py", "backend/app/db/base.py"],
+    "tags": ["database", "session", "sqlalchemy"]
+  },
+  "service-migrations": {
+    "title": "Alembic Migrations",
+    "type": "service",
+    "files": ["backend/alembic.ini", "backend/migrations/env.py", "backend/migrations/script.py.mako"],
+    "tags": ["migrations", "alembic", "schema"]
+  },
+  "utility-startup": {
+    "title": "Startup Script",
+    "type": "utility",
+    "files": ["backend/scripts/start.sh"],
+    "tags": ["startup", "bash", "init"]
+  },
+  "utility-superuser": {
+    "title": "Superuser Seeder",
+    "type": "utility",
+    "files": ["backend/app/create_superuser.py"],
+    "tags": ["seed", "admin", "init"]
+  },
+  "model-user": {
+    "title": "User Model",
+    "type": "model",
+    "files": ["backend/app/models/user.py"],
+    "tags": ["model", "user", "rbac"]
+  },
+  "model-exam": {
+    "title": "Exam Model",
+    "type": "model",
+    "files": ["backend/app/models/exam.py"],
+    "tags": ["model", "exam"]
+  },
+  "model-question": {
+    "title": "Question Model",
+    "type": "model",
+    "files": ["backend/app/models/exam.py"],
+    "tags": ["model", "question"]
+  },
+  "model-exam-question": {
+    "title": "ExamQuestion Association",
+    "type": "model",
+    "files": ["backend/app/models/exam.py"],
+    "tags": ["model", "association"]
+  },
+  "model-assignment": {
+    "title": "Assignment Model",
+    "type": "model",
+    "files": ["backend/app/models/exam.py"],
+    "tags": ["model", "assignment"]
+  },
+  "model-attempt": {
+    "title": "Attempt Model",
+    "type": "model",
+    "files": ["backend/app/models/attempt.py"],
+    "tags": ["model", "attempt"]
+  },
+  "model-response": {
+    "title": "Response Model",
+    "type": "model",
+    "files": ["backend/app/models/attempt.py"],
+    "tags": ["model", "response"]
+  },
+  "model-proctoring-log": {
+    "title": "ProctoringLog Model",
+    "type": "model",
+    "files": ["backend/app/models/attempt.py"],
+    "tags": ["model", "proctoring", "security"]
+  },
+  "model-result": {
+    "title": "Result Model",
+    "type": "model",
+    "files": ["backend/app/models/attempt.py"],
+    "tags": ["model", "result"]
+  },
+  "feature-api-router": {
+    "title": "API v1 Router",
+    "type": "feature",
+    "files": ["backend/app/api/v1/api.py"],
+    "tags": ["api", "routing"]
+  },
+  "feature-auth-api": {
+    "title": "Auth API",
+    "type": "feature",
+    "files": ["backend/app/api/v1/auth.py"],
+    "tags": ["api", "auth", "login", "jwt"]
+  },
+  "feature-users-api": {
+    "title": "Users API",
+    "type": "feature",
+    "files": ["backend/app/api/v1/users.py"],
+    "tags": ["api", "users", "crud"]
+  },
+  "feature-exams-api": {
+    "title": "Exams API",
+    "type": "feature",
+    "files": ["backend/app/api/v1/exams.py"],
+    "tags": ["api", "exams", "questions", "crud"]
+  },
+  "feature-attempts-api": {
+    "title": "Attempts API",
+    "type": "feature",
+    "files": ["backend/app/api/v1/attempts.py"],
+    "tags": ["api", "attempts", "proctoring", "evaluation"]
+  },
+  "feature-reports-api": {
+    "title": "Reports API",
+    "type": "feature",
+    "files": ["backend/app/api/v1/reports.py"],
+    "tags": ["api", "reports", "analytics"]
+  },
+  "feature-schemas": {
+    "title": "Pydantic Schemas",
+    "type": "feature",
+    "files": ["backend/app/schemas/user.py", "backend/app/schemas/exam.py", "backend/app/schemas/attempt.py", "backend/app/schemas/token.py"],
+    "tags": ["schemas", "pydantic", "validation"]
+  },
+  "feature-testing": {
+    "title": "Test Suite",
+    "type": "feature",
+    "files": ["backend/tests/conftest.py", "backend/tests/test_api.py"],
+    "tags": ["testing", "pytest"]
+  },
+  "screen-login": {
+    "title": "Login Screen",
+    "type": "screen",
+    "files": ["frontend/index.html", "frontend/src/scripts/auth.ts"],
+    "tags": ["ui", "auth", "login"]
+  },
+  "screen-dashboard": {
+    "title": "Dashboard Screen",
+    "type": "screen",
+    "files": ["frontend/dashboard.html", "frontend/src/scripts/dashboard.ts"],
+    "tags": ["ui", "dashboard", "exams"]
+  },
+  "screen-exam": {
+    "title": "Exam Screen",
+    "type": "screen",
+    "files": ["frontend/exam.html", "frontend/src/scripts/exam.ts"],
+    "tags": ["ui", "exam", "timer", "proctoring"]
+  },
+  "screen-result": {
+    "title": "Result Screen",
+    "type": "screen",
+    "files": ["frontend/result.html", "frontend/src/scripts/result.ts"],
+    "tags": ["ui", "results"]
+  },
+  "component-api-client": {
+    "title": "API Client (apiFetch)",
+    "type": "component",
+    "files": ["frontend/src/scripts/api.ts"],
+    "tags": ["api", "http", "fetch"]
+  },
+  "component-proctor": {
+    "title": "Proctor Class",
+    "type": "component",
+    "files": ["frontend/src/scripts/proctor.ts"],
+    "tags": ["proctoring", "security", "events"]
+  },
+  "component-utils": {
+    "title": "Frontend Utilities",
+    "type": "utility",
+    "files": ["frontend/src/scripts/utils.ts"],
+    "tags": ["utility", "helpers"]
+  },
+  "component-css-design": {
+    "title": "CSS Design System",
+    "type": "theme",
+    "files": ["frontend/src/styles/main.css", "frontend/src/styles/base.css", "frontend/src/styles/layout.css", "frontend/src/styles/components.css"],
+    "tags": ["css", "design", "theme"]
+  },
+  "config-nginx": {
+    "title": "Nginx Reverse Proxy",
+    "type": "config",
+    "files": ["frontend/nginx.conf"],
+    "tags": ["nginx", "proxy", "config"]
+  },
+  "flow-auth": {
+    "title": "Authentication Flow",
+    "type": "flow",
+    "files": [],
+    "tags": ["flow", "auth", "jwt"]
+  },
+  "flow-exam-lifecycle": {
+    "title": "Exam Lifecycle Flow",
+    "type": "flow",
+    "files": [],
+    "tags": ["flow", "exam", "lifecycle"]
+  },
+  "flow-proctoring": {
+    "title": "Proctoring Flow",
+    "type": "flow",
+    "files": [],
+    "tags": ["flow", "proctoring", "security"]
+  },
+  "placeholder-services": {
+    "title": "Services Layer (Empty)",
+    "type": "module",
+    "files": [],
+    "tags": ["services", "empty", "planned"]
+  },
+  "placeholder-repositories": {
+    "title": "Repositories Layer (Empty)",
+    "type": "module",
+    "files": [],
+    "tags": ["repositories", "empty", "planned"]
+  }
+}

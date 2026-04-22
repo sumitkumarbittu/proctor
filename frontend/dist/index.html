@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="OEPS helps teams run secure online exams with clean workflows and built-in proctoring.">
+    <title>Login — OEPS</title>
+  <script type="module" crossorigin src="/assets/main-ymH_wWXd.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-CF-FJpsQ.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-DfUMrStV.css">
+</head>
+<body>
+    <div class="auth-layout">
+        <div class="auth-shell">
+            <section class="hero-panel animate-slide-up">
+                <div class="flex flex-col gap-md">
+                    <span class="eyebrow">Secure exam workspace</span>
+                    <h1 class="page-title">Online assessments that feel calm, clear, and reliable.</h1>
+                    <p class="page-copy">
+                        OEPS gives students a focused test experience while helping exam teams manage assignments,
+                        proctoring signals, and results from one place.
+                    </p>
+                </div>
+
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span class="feature-icon">01</span>
+                        <div>
+                            <strong>Focused exam flow</strong>
+                            <p>Auto-save, question navigation, and a cleaner workspace that keeps attention on the test.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">02</span>
+                        <div>
+                            <strong>Built-in monitoring</strong>
+                            <p>Tab switches and focus changes are logged without adding noise to the student experience.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">03</span>
+                        <div>
+                            <strong>Simple operations</strong>
+                            <p>Create exams, assign students, review submissions, and publish outcomes in the same workspace.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card auth-card animate-scale-in">
+                <div class="flex items-center gap-sm">
+                    <div class="brand-mark">OE</div>
+                    <div>
+                        <p class="eyebrow">OEPS</p>
+                        <h1 class="panel-title">Welcome back</h1>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-sm">
+                    <p class="panel-copy">Sign in to continue to your exam dashboard.</p>
+                </div>
+
+                <form id="loginForm" class="auth-form">
+                    <div class="input-group">
+                        <label class="label" for="email">Email address</label>
+                        <input type="email" id="email" class="input" required placeholder="you@example.com" autocomplete="email">
+                    </div>
+                    <div class="input-group">
+                        <label class="label" for="password">Password</label>
+                        <input type="password" id="password" class="input" required placeholder="Enter your password" autocomplete="current-password">
+                    </div>
+
+                    <button type="submit" id="login-btn" class="btn btn-primary btn-lg btn-full">
+                        <span id="login-text">Sign in</span>
+                        <span id="login-spinner" class="button-spinner hidden" aria-hidden="true">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="animation: spin 1s linear infinite;">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="60" stroke-dashoffset="20" opacity="0.35"></circle>
+                                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+                            </svg>
+                        </span>
+                    </button>
+
+                    <p id="error-message" class="form-message error-message" aria-live="polite"></p>
+                </form>
+
+                <div class="login-footer">
+                    <div>
+                        <p class="section-title">Need access?</p>
+                        <p class="helper-text">Use the credentials assigned by your admin or examiner.</p>
+                    </div>
+                    <p class="helper-text">Online Examination &amp; Proctoring System</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</body>
+</html>

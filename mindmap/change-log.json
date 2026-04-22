@@ -1,0 +1,18 @@
+[
+  {
+    "change_id": "chg-001",
+    "title": "Initial project mindmap creation",
+    "summary": "Deep analysis of the entire OEPS project structure. Created comprehensive mindmap with 44 nodes, 61 edges, and 9 groups covering all backend modules (FastAPI, SQLAlchemy models, API routes, schemas), frontend screens (Login, Dashboard, Exam, Result), services (API client, Proctor, Utils), CSS design system, infrastructure (Docker, Nginx), and cross-cutting flows (Auth, Exam Lifecycle, Proctoring).",
+    "affected_nodes": ["ALL — initial creation"],
+    "files_changed": [
+      "mindmap/project-mindmap.json",
+      "mindmap/project-mindmap.mmd",
+      "mindmap/node-index.json",
+      "mindmap/change-log.json",
+      "mindmap/README.md"
+    ],
+    "started_at": "2026-04-23T03:03:00+05:30",
+    "completed_at": "2026-04-23T03:10:00+05:30",
+    "completed": true
+  }
+]
