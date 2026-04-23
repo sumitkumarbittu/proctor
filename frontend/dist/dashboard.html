@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="OEPS dashboard for managing exams, users, results, and reports.">
     <title>Dashboard — OEPS</title>
-  <script type="module" crossorigin src="/assets/dashboard-wvK7MVLn.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/utils-CF-FJpsQ.js">
-  <link rel="modulepreload" crossorigin href="/assets/api-eNSiWK_x.js">
-  <link rel="stylesheet" crossorigin href="/assets/utils-DfUMrStV.css">
+  <script type="module" crossorigin src="/assets/dashboard--stP7Bcy.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-BjHaNtKY.js">
+  <link rel="modulepreload" crossorigin href="/assets/api-BV8riEN3.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-D8dMZ4lo.css">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -103,6 +103,7 @@
                         <h2 class="panel-title">Attempt history and outcomes</h2>
                     </div>
                 </div>
+                <div id="results-summary" class="stack-list"></div>
                 <div id="results-list" class="stack-list"></div>
             </section>
 
@@ -136,8 +137,12 @@
                         <span class="section-title">Question Bank</span>
                         <h2 class="panel-title">Reusable questions and scoring</h2>
                     </div>
-                    <button id="create-question-btn" class="btn btn-primary">Add question</button>
+                    <div class="flex gap-sm">
+                        <button id="create-folder-btn" class="btn btn-ghost">Add folder</button>
+                        <button id="create-question-btn" class="btn btn-primary">Add question</button>
+                    </div>
                 </div>
+                <div id="question-folder-toolbar" class="stack-list"></div>
                 <div id="questions-list" class="stack-list"></div>
             </section>
 
@@ -245,6 +250,10 @@
                     <textarea id="q-prompt" class="textarea" rows="3" required placeholder="Enter the question"></textarea>
                 </div>
                 <div class="input-group">
+                    <label class="label" for="q-folder">Folder</label>
+                    <select id="q-folder" class="select"></select>
+                </div>
+                <div class="input-group">
                     <label class="label" for="q-marks">Marks</label>
                     <input type="number" id="q-marks" class="input" min="1" value="1">
                 </div>
@@ -264,6 +273,29 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" data-close-modal="question-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="question-submit-btn">Add Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="folder-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="folder-modal-title">Create Folder</h3>
+                <button class="modal-close" data-close-modal="folder-modal" aria-label="Close folder modal">×</button>
+            </div>
+            <form id="folder-form">
+                <div class="input-group">
+                    <label class="label" for="folder-name">Folder name</label>
+                    <input type="text" id="folder-name" class="input" required placeholder="Midterm Bank">
+                </div>
+                <div class="input-group">
+                    <label class="label" for="folder-description">Description</label>
+                    <textarea id="folder-description" class="textarea" rows="3" placeholder="Reusable questions for shared teaching teams"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="folder-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="folder-submit-btn">Create Folder</button>
                 </div>
             </form>
         </div>

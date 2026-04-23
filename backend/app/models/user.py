@@ -23,4 +23,7 @@ class User(Base):
     # Relationships
     exams_created = relationship("Exam", back_populates="creator")
     assignments = relationship("Assignment", back_populates="student")
+    teacher_exam_assignments = relationship("TeacherAssignment", back_populates="teacher")
     attempts = relationship("Attempt", back_populates="student")
+    question_folders = relationship("QuestionFolder", back_populates="owner")
+    shared_question_folder_links = relationship("QuestionFolderShare", back_populates="user")

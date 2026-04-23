@@ -1,0 +1,1464 @@
+{
+  "project_name": "Online Examination and Proctoring System (OEPS)",
+  "project_summary": "A comprehensive online examination platform with built-in proctoring, role-aware exam delivery, advanced reporting analytics, and a modernized multi-page frontend. Features RBAC (Admin, Examiner, Student), exam creation with MCQ/Subjective questions, assignment-based access control, timed attempts with auto-save and resume support, browser-based proctoring (tab switch/blur detection), automatic MCQ grading, manual subjective evaluation, and analytics-rich reporting dashboards. Built with FastAPI (async Python) backend, PostgreSQL database, and a Vite-compiled TypeScript + vanilla CSS frontend served via Nginx. Orchestrated with Docker Compose.",
+  "version": 2,
+  "change_in_progress": false,
+  "last_updated_for_change": "chg-002",
+  "generated_at": "2026-04-23T04:24:00+05:30",
+  "architecture": {
+    "pattern": "Layered Architecture (Presentation → API → Service → Repository → Database)",
+    "platform": "Web (Docker Compose: PostgreSQL + FastAPI + Nginx)",
+    "storage": "PostgreSQL 15 via SQLAlchemy 2.0 (Async) + Alembic migrations",
+    "state_management": "Server-side session via JWT tokens; client-side localStorage for token persistence",
+    "notes": "Services and repositories directories still exist but remain unused — business logic lives directly in API route handlers. Frontend remains a 4-page architecture, but now uses a shared responsive light theme, richer dashboard/report visualization blocks, and stricter exam/report integration."
+  },
+  "visualization": {
+    "root_id": "project-root",
+    "preferred_layout": "hierarchical",
+    "secondary_layout": "force-directed"
+  },
+  "nodes": [
+    {
+      "id": "project-root",
+      "type": "project",
+      "title": "OEPS",
+      "summary": "Online Examination and Proctoring System — full-stack web application for conducting secure online exams with proctoring",
+      "parent_id": null,
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["project", "fullstack", "docker"],
+      "files": ["docker-compose.yml", ".env.example", "README.md", "SRS.md", "LICENSE"],
+      "owners": ["Sumit Kumar"],
+      "metadata": {
+        "layer": "root",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "module-backend",
+      "type": "module",
+      "title": "Backend (FastAPI)",
+      "summary": "Python 3.11 FastAPI application with async SQLAlchemy ORM, JWT auth, and Alembic migrations. Serves REST API at /api/v1.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["backend", "python", "fastapi", "async"],
+      "files": ["backend/Dockerfile", "backend/requirements.txt", "backend/alembic.ini"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "module-frontend",
+      "type": "module",
+      "title": "Frontend (Vite + TypeScript)",
+      "summary": "Multi-page frontend with HTML5, TypeScript modules, and vanilla CSS. Built with Vite, served by Nginx in production. Four pages: Login, Dashboard, Exam, Result.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["frontend", "typescript", "vite", "nginx"],
+      "files": ["frontend/Dockerfile", "frontend/package.json", "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/nginx.conf"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "module-database",
+      "type": "module",
+      "title": "Database (PostgreSQL 15)",
+      "summary": "PostgreSQL 15 Alpine container with persistent volume. Stores users, exams, questions, attempts, responses, proctoring logs, and results.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["database", "postgresql", "docker"],
+      "files": ["docker-compose.yml"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "config-docker",
+      "type": "config",
+      "title": "Docker Compose Orchestration",
+      "summary": "Orchestrates 3 services: db (postgres:15-alpine), backend (FastAPI), frontend (Nginx). Backend mounts app directory for hot-reload. Frontend uses multi-stage build.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["docker", "devops", "config"],
+      "files": ["docker-compose.yml", "backend/Dockerfile", "frontend/Dockerfile"],
+      "owners": [],
+      "metadata": {
+        "layer": "infrastructure",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "service-entrypoint",
+      "type": "service",
+      "title": "App Entry Point (main.py)",
+      "summary": "Creates FastAPI app instance, configures CORS middleware, and mounts the v1 API router at /api/v1.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["entrypoint", "fastapi", "cors"],
+      "files": ["backend/app/main.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "config-settings",
+      "type": "config",
+      "title": "Settings & Configuration",
+      "summary": "Pydantic BaseSettings class loading from environment variables. Supports both individual POSTGRES_* vars and single DATABASE_URL. Constructs async SQLAlchemy URI with postgresql+asyncpg scheme.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["config", "pydantic", "env"],
+      "files": ["backend/app/core/config.py", ".env.example"],
+      "owners": [],
+      "metadata": {
+        "layer": "core",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "service-security",
+      "type": "service",
+      "title": "Security Module",
+      "summary": "JWT token creation (jose), bcrypt password hashing/verification (passlib). Creates access tokens with user ID, role, and expiry.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["security", "jwt", "bcrypt", "auth"],
+      "files": ["backend/app/core/security.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "core",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "service-deps",
+      "type": "service",
+      "title": "API Dependencies (Auth Guards)",
+      "summary": "FastAPI dependency injection for authentication. Provides get_current_user (JWT decode), get_current_active_user, get_current_active_superuser (Admin only), and get_current_active_examiner (Admin + Examiner).",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["auth", "dependency-injection", "rbac"],
+      "files": ["backend/app/api/deps.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "service-db-session",
+      "type": "service",
+      "title": "Database Session Manager",
+      "summary": "Creates async SQLAlchemy engine and AsyncSessionLocal factory. Provides get_db() async generator for dependency injection.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["database", "session", "sqlalchemy"],
+      "files": ["backend/app/db/session.py", "backend/app/db/base_class.py", "backend/app/db/base.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "service-migrations",
+      "type": "service",
+      "title": "Alembic Migrations",
+      "summary": "Async Alembic migration environment. Auto-generates migrations from SQLAlchemy models. Startup script auto-generates initial migration if versions/ is empty.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["migrations", "alembic", "schema"],
+      "files": ["backend/alembic.ini", "backend/migrations/env.py", "backend/migrations/script.py.mako"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "medium",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "utility-startup",
+      "type": "utility",
+      "title": "Startup Script",
+      "summary": "Bash script that waits for PostgreSQL, auto-generates migrations if needed, runs alembic upgrade head, creates default superuser, then starts uvicorn with hot-reload.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["startup", "bash", "init"],
+      "files": ["backend/scripts/start.sh"],
+      "owners": [],
+      "metadata": {
+        "layer": "infrastructure",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "utility-superuser",
+      "type": "utility",
+      "title": "Superuser Seeder",
+      "summary": "Python script that creates default admin user (admin@example.com / password) if not exists. Uses sync-compatible asyncio loop with AsyncSessionLocal.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["seed", "admin", "init"],
+      "files": ["backend/app/create_superuser.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "utility",
+        "priority": "low",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-user",
+      "type": "model",
+      "title": "User Model",
+      "summary": "SQLAlchemy model for users table. Fields: id, name, email (unique), password_hash, role (UserRole enum: ADMIN/EXAMINER/STUDENT), is_active, created_at. Relationships to exams_created, assignments, attempts.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "user", "rbac"],
+      "files": ["backend/app/models/user.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-exam",
+      "type": "model",
+      "title": "Exam Model",
+      "summary": "SQLAlchemy model for exams table. Fields: id, title, instructions, status (ExamStatus enum: DRAFT/SCHEDULED/LIVE/CLOSED/RESULT_PUBLISHED), start_time, duration_minutes, created_by (FK users), created_at. Relationships to creator, questions (via ExamQuestion), assignments, attempts.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "exam"],
+      "files": ["backend/app/models/exam.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "model-question",
+      "type": "model",
+      "title": "Question Model",
+      "summary": "SQLAlchemy model for questions table. Fields: id, type (QuestionType: MCQ/SUBJECTIVE), prompt, options (JSON), correct_option, marks, created_by (FK users), created_at.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "question"],
+      "files": ["backend/app/models/exam.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-exam-question",
+      "type": "model",
+      "title": "ExamQuestion Association",
+      "summary": "Many-to-many association table linking exams to questions with an order_index field. Composite PK (exam_id, question_id).",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "association"],
+      "files": ["backend/app/models/exam.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-assignment",
+      "type": "model",
+      "title": "Assignment Model",
+      "summary": "Association table linking exams to students. Composite PK (exam_id, student_id).",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "assignment"],
+      "files": ["backend/app/models/exam.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-attempt",
+      "type": "model",
+      "title": "Attempt Model",
+      "summary": "SQLAlchemy model for attempts table. Fields: id, exam_id (FK), student_id (FK), status (AttemptStatus: IN_PROGRESS/SUBMITTED/EVALUATED), started_at, submitted_at. Relationships to exam, student, responses, logs, result.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "attempt"],
+      "files": ["backend/app/models/attempt.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "model-response",
+      "type": "model",
+      "title": "Response Model",
+      "summary": "SQLAlchemy model for responses table. Stores student answers per question per attempt. Fields: id, attempt_id (FK), question_id (FK), answer, marks_awarded.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "response"],
+      "files": ["backend/app/models/attempt.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-proctoring-log",
+      "type": "model",
+      "title": "ProctoringLog Model",
+      "summary": "SQLAlchemy model for proctoring_logs table. Logs browser events during exam. Fields: id, attempt_id (FK), event_type (TAB_SWITCH/BLUR/FOCUS), severity, metadata_info, created_at.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "proctoring", "security"],
+      "files": ["backend/app/models/attempt.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "model-result",
+      "type": "model",
+      "title": "Result Model",
+      "summary": "SQLAlchemy model for results table. Fields: id, attempt_id (FK, unique), total_score, max_score, published_at. One-to-one with Attempt.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["model", "result"],
+      "files": ["backend/app/models/attempt.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "feature-api-router",
+      "type": "feature",
+      "title": "API v1 Router",
+      "summary": "Central APIRouter aggregating 5 sub-routers: /auth, /users, /exams, /attempts, /reports. Mounted at /api/v1.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "routing"],
+      "files": ["backend/app/api/v1/api.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "feature-auth-api",
+      "type": "feature",
+      "title": "Auth API (/auth)",
+      "summary": "POST /auth/login — OAuth2 password flow. Validates email/password, returns JWT access token with user ID and role.",
+      "parent_id": "feature-api-router",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "auth", "login", "jwt"],
+      "files": ["backend/app/api/v1/auth.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "feature-users-api",
+      "type": "feature",
+      "title": "Users API (/users)",
+      "summary": "GET / — list users (admin only). POST / — create user (admin only). GET /me — current user info. All protected by JWT.",
+      "parent_id": "feature-api-router",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "users", "crud"],
+      "files": ["backend/app/api/v1/users.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "feature-exams-api",
+      "type": "feature",
+      "title": "Exams API (/exams)",
+      "summary": "Exam and question management API. Supports question CRUD, exam CRUD, question-to-exam linking, assignment, and status updates. Exam list/detail endpoints now eagerly load question detail and enforce role-aware visibility so students only access assigned or already-attempted non-draft exams.",
+      "parent_id": "feature-api-router",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "exams", "questions", "crud", "assignments", "access-control"],
+      "files": ["backend/app/api/v1/exams.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "feature-attempts-api",
+      "type": "feature",
+      "title": "Attempts API (/attempts)",
+      "summary": "Attempt lifecycle API. Students can start attempts only when the exam is assigned, live, and contains questions. Supports attempt reads, exam-specific attempt lists, response auto-save, response recovery for owners/examiners, submission, proctoring logs, MCQ evaluation, and manual grading endpoints.",
+      "parent_id": "feature-api-router",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "attempts", "proctoring", "evaluation", "autosave", "exam-access"],
+      "files": ["backend/app/api/v1/attempts.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "feature-reports-api",
+      "type": "feature",
+      "title": "Reports API (/reports)",
+      "summary": "Advanced analytics API for examiner/admin dashboards. GET /dashboard returns portfolio-level KPIs, status mix, score bands, risk mix, activity timeline, and top-exam rankings. GET /exam/{exam_id}/summary and /analytics return per-exam funnels, distributions, question insights, leaderboard rows, and proctoring breakdowns.",
+      "parent_id": "feature-api-router",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "reports", "analytics", "dashboard", "visualization"],
+      "files": ["backend/app/api/v1/reports.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "feature-schemas",
+      "type": "feature",
+      "title": "Pydantic Schemas",
+      "summary": "Request/response validation schemas: UserCreate/User, ExamCreate/Exam/ExamQuestion/QuestionCreate, AttemptCreate/Attempt/ResponseCreate/ProctorLogCreate, Token/TokenPayload.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["schemas", "pydantic", "validation"],
+      "files": ["backend/app/schemas/user.py", "backend/app/schemas/exam.py", "backend/app/schemas/attempt.py", "backend/app/schemas/token.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "feature-testing",
+      "type": "feature",
+      "title": "Test Suite",
+      "summary": "Pytest + pytest-asyncio smoke suite using httpx AsyncClient. Async fixture wiring was corrected to use pytest_asyncio.fixture so container smoke checks run again. Coverage is still minimal: root endpoint check and login failure check.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "incomplete",
+      "tags": ["testing", "pytest", "pytest-asyncio", "smoke"],
+      "files": ["backend/tests/conftest.py", "backend/tests/test_api.py"],
+      "owners": [],
+      "metadata": {
+        "layer": "testing",
+        "priority": "low",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "screen-login",
+      "type": "screen",
+      "title": "Login Screen",
+      "summary": "Full-viewport centered card with email/password form. Submits to /api/v1/auth/login as URL-encoded form data. Stores JWT in localStorage, redirects to /dashboard.html.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["ui", "auth", "login"],
+      "files": ["frontend/index.html", "frontend/src/scripts/auth.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "screen-dashboard",
+      "type": "screen",
+      "title": "Dashboard Screen",
+      "summary": "Role-aware operations workspace with a responsive sidebar, exam management, results, user/question administration, and advanced reporting panels. The reports view now renders portfolio KPIs, status mixes, activity timelines, integrity/risk breakdowns, top-exam tables, and per-exam analytics cards.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["ui", "dashboard", "exams", "reports", "analytics"],
+      "files": ["frontend/dashboard.html", "frontend/src/scripts/dashboard.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "screen-exam",
+      "type": "screen",
+      "title": "Exam Screen",
+      "summary": "Two-column exam workspace with question navigator, live save state, resume support, formatted countdown timer, manual/auto submission, and proctoring hooks. Restores saved answers for valid owners and uses clearer status messaging for saving, connectivity, and timing states.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["ui", "exam", "timer", "proctoring", "autosave", "resume"],
+      "files": ["frontend/exam.html", "frontend/src/scripts/exam.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "screen-result",
+      "type": "screen",
+      "title": "Result Screen",
+      "summary": "Centered card showing score (total/max), status badge (PUBLISHED/SUBMITTED), and message. If attempt is IN_PROGRESS, redirects back to exam. Links back to dashboard.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["ui", "results"],
+      "files": ["frontend/result.html", "frontend/src/scripts/result.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "component-api-client",
+      "type": "component",
+      "title": "API Client (apiFetch)",
+      "summary": "Centralized fetch wrapper. Adds Authorization Bearer token, conditionally sets JSON content type, handles 401 redirect to login, tolerates 204/text payloads, and normalizes network/API failures into clearer frontend errors.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["api", "http", "fetch", "error-handling", "auth"],
+      "files": ["frontend/src/scripts/api.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "service",
+        "priority": "high",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "component-proctor",
+      "type": "component",
+      "title": "Proctor Class",
+      "summary": "Client-side proctoring module. Listens to visibilitychange, blur, and focus events, posts each event to the attempts log API, shows a warning flash on suspicious tab changes, and now cleans up bound listeners correctly when the exam flow ends.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["proctoring", "security", "events", "cleanup"],
+      "files": ["frontend/src/scripts/proctor.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "service",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "component-utils",
+      "type": "utility",
+      "title": "Frontend Utilities",
+      "summary": "Shared utility functions for token persistence, adaptive time formatting, debounce, toast rendering, HTML escaping, and status-badge mapping used across auth, dashboard, exam, and result flows.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["utility", "helpers", "toast", "formatting"],
+      "files": ["frontend/src/scripts/utils.ts"],
+      "owners": [],
+      "metadata": {
+        "layer": "utility",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "component-css-design",
+      "type": "theme",
+      "title": "CSS Design System",
+      "summary": "Shared light-theme design system with responsive auth/dashboard/exam layouts, modern card and form primitives, and dedicated report visual components such as KPI cards, donut indicators, bar rows, timeline charts, and insight panels.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["css", "design", "theme", "responsive", "analytics-ui"],
+      "files": ["frontend/src/styles/main.css", "frontend/src/styles/base.css", "frontend/src/styles/layout.css", "frontend/src/styles/components.css"],
+      "owners": [],
+      "metadata": {
+        "layer": "presentation",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "config-nginx",
+      "type": "config",
+      "title": "Nginx Reverse Proxy",
+      "summary": "Serves static files from Vite build output. Proxies /api/ requests to backend:8000. Handles error pages.",
+      "parent_id": "module-frontend",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["nginx", "proxy", "config"],
+      "files": ["frontend/nginx.conf"],
+      "owners": [],
+      "metadata": {
+        "layer": "infrastructure",
+        "priority": "medium",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "flow-auth",
+      "type": "flow",
+      "title": "Authentication Flow",
+      "summary": "Login form → POST /api/v1/auth/login (URL-encoded) → backend validates email/password → returns JWT → stored in localStorage → subsequent API calls attach Bearer token → deps.py decodes JWT → returns User → role check guards endpoints.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["flow", "auth", "jwt"],
+      "files": [],
+      "owners": [],
+      "metadata": {
+        "layer": "cross-cutting",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "flow-exam-lifecycle",
+      "type": "flow",
+      "title": "Exam Lifecycle Flow",
+      "summary": "Examiner creates questions and exams → assigns students → links questions and sets status → student only sees assigned/eligible exams → start endpoint validates assignment, LIVE status, and available questions → exam restores saved responses, auto-saves answers, and submits manually or on timeout → examiner evaluates → reports surface funnels, score bands, question insights, and leaderboard data.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["flow", "exam", "lifecycle", "assignments", "analytics"],
+      "files": [],
+      "owners": [],
+      "metadata": {
+        "layer": "cross-cutting",
+        "priority": "high",
+        "complexity": "high"
+      }
+    },
+    {
+      "id": "flow-proctoring",
+      "type": "flow",
+      "title": "Proctoring Flow",
+      "summary": "Proctor class instantiates on exam page → listens to visibilitychange, blur, and focus → each event is POSTed to /attempts/{id}/log with metadata → backend stores the signal and later aggregates it into dashboard and per-exam analytics for event breakdowns, risk bands, and integrity alert counts.",
+      "parent_id": "project-root",
+      "change_in_progress": false,
+      "needs_review": false,
+      "status": "stable",
+      "tags": ["flow", "proctoring", "security", "analytics"],
+      "files": [],
+      "owners": [],
+      "metadata": {
+        "layer": "cross-cutting",
+        "priority": "high",
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "placeholder-services",
+      "type": "module",
+      "title": "Services Layer (Empty)",
+      "summary": "Empty directory intended for business logic service classes. Currently all logic lives in API route handlers.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": true,
+      "status": "incomplete",
+      "tags": ["services", "empty", "planned"],
+      "files": [],
+      "owners": [],
+      "metadata": {
+        "layer": "application",
+        "priority": "low",
+        "complexity": "low"
+      }
+    },
+    {
+      "id": "placeholder-repositories",
+      "type": "module",
+      "title": "Repositories Layer (Empty)",
+      "summary": "Empty directory intended for data access repository classes. Currently all DB queries are inline in route handlers.",
+      "parent_id": "module-backend",
+      "change_in_progress": false,
+      "needs_review": true,
+      "status": "incomplete",
+      "tags": ["repositories", "empty", "planned"],
+      "files": [],
+      "owners": [],
+      "metadata": {
+        "layer": "data",
+        "priority": "low",
+        "complexity": "low"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-001",
+      "from": "project-root",
+      "to": "module-backend",
+      "relationship": "contains",
+      "label": "backend application",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-002",
+      "from": "project-root",
+      "to": "module-frontend",
+      "relationship": "contains",
+      "label": "frontend application",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-003",
+      "from": "project-root",
+      "to": "module-database",
+      "relationship": "contains",
+      "label": "database service",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-004",
+      "from": "project-root",
+      "to": "config-docker",
+      "relationship": "contains",
+      "label": "orchestration",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-005",
+      "from": "module-backend",
+      "to": "module-database",
+      "relationship": "depends_on",
+      "label": "async PostgreSQL connection",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-006",
+      "from": "module-frontend",
+      "to": "module-backend",
+      "relationship": "depends_on",
+      "label": "REST API calls via /api/v1",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-007",
+      "from": "config-nginx",
+      "to": "module-backend",
+      "relationship": "configures",
+      "label": "proxies /api/ to backend:8000",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-008",
+      "from": "service-entrypoint",
+      "to": "feature-api-router",
+      "relationship": "uses",
+      "label": "mounts api_router at /api/v1",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-009",
+      "from": "service-entrypoint",
+      "to": "config-settings",
+      "relationship": "depends_on",
+      "label": "reads PROJECT_NAME, CORS config",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-010",
+      "from": "feature-auth-api",
+      "to": "service-security",
+      "relationship": "uses",
+      "label": "verify_password, create_access_token",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-011",
+      "from": "feature-auth-api",
+      "to": "model-user",
+      "relationship": "reads_from",
+      "label": "queries User by email",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-012",
+      "from": "service-deps",
+      "to": "service-security",
+      "relationship": "uses",
+      "label": "JWT decode for auth",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-013",
+      "from": "service-deps",
+      "to": "model-user",
+      "relationship": "reads_from",
+      "label": "loads User by ID from token",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-014",
+      "from": "feature-users-api",
+      "to": "service-deps",
+      "relationship": "uses",
+      "label": "auth guard dependencies",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-015",
+      "from": "feature-users-api",
+      "to": "model-user",
+      "relationship": "reads_from",
+      "label": "CRUD operations",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-016",
+      "from": "feature-exams-api",
+      "to": "model-exam",
+      "relationship": "reads_from",
+      "label": "CRUD exams",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-017",
+      "from": "feature-exams-api",
+      "to": "model-question",
+      "relationship": "reads_from",
+      "label": "CRUD questions",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-018",
+      "from": "feature-exams-api",
+      "to": "model-exam-question",
+      "relationship": "writes_to",
+      "label": "links questions to exams",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-019",
+      "from": "feature-attempts-api",
+      "to": "model-attempt",
+      "relationship": "writes_to",
+      "label": "creates/updates attempts",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-020",
+      "from": "feature-attempts-api",
+      "to": "model-response",
+      "relationship": "writes_to",
+      "label": "upserts student answers",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-021",
+      "from": "feature-attempts-api",
+      "to": "model-proctoring-log",
+      "relationship": "writes_to",
+      "label": "logs proctoring events",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-022",
+      "from": "feature-attempts-api",
+      "to": "model-result",
+      "relationship": "writes_to",
+      "label": "creates evaluation results",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-023",
+      "from": "feature-reports-api",
+      "to": "model-attempt",
+      "relationship": "reads_from",
+      "label": "counts attempts",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-024",
+      "from": "feature-reports-api",
+      "to": "model-result",
+      "relationship": "reads_from",
+      "label": "aggregates scores",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-062",
+      "from": "feature-reports-api",
+      "to": "model-exam",
+      "relationship": "reads_from",
+      "label": "loads exam analytics context",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-063",
+      "from": "feature-reports-api",
+      "to": "model-assignment",
+      "relationship": "reads_from",
+      "label": "measures assignment participation",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-064",
+      "from": "feature-reports-api",
+      "to": "model-response",
+      "relationship": "reads_from",
+      "label": "derives question insights",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-065",
+      "from": "feature-reports-api",
+      "to": "model-proctoring-log",
+      "relationship": "reads_from",
+      "label": "aggregates integrity events",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-025",
+      "from": "service-db-session",
+      "to": "config-settings",
+      "relationship": "depends_on",
+      "label": "reads SQLALCHEMY_DATABASE_URI",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-026",
+      "from": "service-migrations",
+      "to": "service-db-session",
+      "relationship": "uses",
+      "label": "async engine for migrations",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-027",
+      "from": "utility-startup",
+      "to": "service-migrations",
+      "relationship": "uses",
+      "label": "runs alembic upgrade head",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-028",
+      "from": "utility-startup",
+      "to": "utility-superuser",
+      "relationship": "uses",
+      "label": "creates default admin",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-029",
+      "from": "screen-login",
+      "to": "feature-auth-api",
+      "relationship": "depends_on",
+      "label": "POST /auth/login",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-030",
+      "from": "screen-login",
+      "to": "screen-dashboard",
+      "relationship": "navigates_to",
+      "label": "on successful login",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-031",
+      "from": "screen-dashboard",
+      "to": "feature-users-api",
+      "relationship": "depends_on",
+      "label": "GET /users/me",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-032",
+      "from": "screen-dashboard",
+      "to": "feature-exams-api",
+      "relationship": "depends_on",
+      "label": "GET /exams/",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-066",
+      "from": "screen-dashboard",
+      "to": "feature-reports-api",
+      "relationship": "depends_on",
+      "label": "dashboard KPIs + per-exam analytics",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-033",
+      "from": "screen-dashboard",
+      "to": "screen-exam",
+      "relationship": "navigates_to",
+      "label": "on Start Attempt click",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-034",
+      "from": "screen-exam",
+      "to": "feature-attempts-api",
+      "relationship": "depends_on",
+      "label": "start/save/submit/log API calls",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-035",
+      "from": "screen-exam",
+      "to": "feature-exams-api",
+      "relationship": "depends_on",
+      "label": "GET /exams/{id} for questions",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-036",
+      "from": "screen-exam",
+      "to": "component-proctor",
+      "relationship": "uses",
+      "label": "initializes Proctor class",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-037",
+      "from": "screen-exam",
+      "to": "screen-result",
+      "relationship": "navigates_to",
+      "label": "after submission",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-038",
+      "from": "screen-result",
+      "to": "feature-attempts-api",
+      "relationship": "depends_on",
+      "label": "GET /attempts/{id}",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-039",
+      "from": "component-proctor",
+      "to": "feature-attempts-api",
+      "relationship": "depends_on",
+      "label": "POST /attempts/{id}/log",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-040",
+      "from": "component-api-client",
+      "to": "component-utils",
+      "relationship": "uses",
+      "label": "getAuthToken, API_BASE_URL",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-041",
+      "from": "screen-dashboard",
+      "to": "component-api-client",
+      "relationship": "uses",
+      "label": "apiFetch for API calls",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-042",
+      "from": "screen-exam",
+      "to": "component-api-client",
+      "relationship": "uses",
+      "label": "apiFetch for API calls",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-043",
+      "from": "screen-result",
+      "to": "component-api-client",
+      "relationship": "uses",
+      "label": "apiFetch for API calls",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-044",
+      "from": "flow-auth",
+      "to": "screen-login",
+      "relationship": "related_to",
+      "label": "entry point",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-045",
+      "from": "flow-auth",
+      "to": "service-security",
+      "relationship": "related_to",
+      "label": "JWT generation",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-046",
+      "from": "flow-auth",
+      "to": "service-deps",
+      "relationship": "related_to",
+      "label": "JWT validation",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-047",
+      "from": "flow-exam-lifecycle",
+      "to": "feature-exams-api",
+      "relationship": "related_to",
+      "label": "exam creation",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-048",
+      "from": "flow-exam-lifecycle",
+      "to": "feature-attempts-api",
+      "relationship": "related_to",
+      "label": "attempt management",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-049",
+      "from": "flow-proctoring",
+      "to": "component-proctor",
+      "relationship": "related_to",
+      "label": "client-side monitoring",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-050",
+      "from": "flow-proctoring",
+      "to": "model-proctoring-log",
+      "relationship": "related_to",
+      "label": "server-side storage",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-051",
+      "from": "feature-schemas",
+      "to": "model-user",
+      "relationship": "related_to",
+      "label": "UserRole enum import",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-052",
+      "from": "feature-schemas",
+      "to": "model-exam",
+      "relationship": "related_to",
+      "label": "ExamStatus, QuestionType imports",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-053",
+      "from": "feature-schemas",
+      "to": "model-attempt",
+      "relationship": "related_to",
+      "label": "AttemptStatus import",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-054",
+      "from": "model-user",
+      "to": "model-exam",
+      "relationship": "related_to",
+      "label": "creator relationship (FK users.id)",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-055",
+      "from": "model-user",
+      "to": "model-assignment",
+      "relationship": "related_to",
+      "label": "student assignment (FK users.id)",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-056",
+      "from": "model-user",
+      "to": "model-attempt",
+      "relationship": "related_to",
+      "label": "student attempts (FK users.id)",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-057",
+      "from": "model-exam",
+      "to": "model-exam-question",
+      "relationship": "contains",
+      "label": "exam has questions via association",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-058",
+      "from": "model-question",
+      "to": "model-exam-question",
+      "relationship": "related_to",
+      "label": "question linked to exam",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-059",
+      "from": "model-attempt",
+      "to": "model-response",
+      "relationship": "contains",
+      "label": "attempt has responses",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-060",
+      "from": "model-attempt",
+      "to": "model-proctoring-log",
+      "relationship": "contains",
+      "label": "attempt has proctoring logs",
+      "direction": "forward",
+      "change_in_progress": false
+    },
+    {
+      "id": "edge-061",
+      "from": "model-attempt",
+      "to": "model-result",
+      "relationship": "contains",
+      "label": "attempt has one result",
+      "direction": "forward",
+      "change_in_progress": false
+    }
+  ],
+  "groups": [
+    {
+      "id": "group-ui",
+      "title": "UI / Presentation Layer",
+      "node_ids": ["screen-login", "screen-dashboard", "screen-exam", "screen-result", "component-css-design"]
+    },
+    {
+      "id": "group-frontend-services",
+      "title": "Frontend Services",
+      "node_ids": ["component-api-client", "component-proctor", "component-utils"]
+    },
+    {
+      "id": "group-api",
+      "title": "Backend API Layer",
+      "node_ids": ["feature-api-router", "feature-auth-api", "feature-users-api", "feature-exams-api", "feature-attempts-api", "feature-reports-api"]
+    },
+    {
+      "id": "group-core",
+      "title": "Backend Core",
+      "node_ids": ["service-entrypoint", "config-settings", "service-security", "service-deps"]
+    },
+    {
+      "id": "group-data",
+      "title": "Data Layer (Models)",
+      "node_ids": ["model-user", "model-exam", "model-question", "model-exam-question", "model-assignment", "model-attempt", "model-response", "model-proctoring-log", "model-result"]
+    },
+    {
+      "id": "group-data-access",
+      "title": "Data Access",
+      "node_ids": ["service-db-session", "service-migrations", "feature-schemas"]
+    },
+    {
+      "id": "group-infra",
+      "title": "Infrastructure & Config",
+      "node_ids": ["config-docker", "config-nginx", "utility-startup", "utility-superuser"]
+    },
+    {
+      "id": "group-flows",
+      "title": "Cross-Cutting Flows",
+      "node_ids": ["flow-auth", "flow-exam-lifecycle", "flow-proctoring"]
+    },
+    {
+      "id": "group-incomplete",
+      "title": "Incomplete / Planned",
+      "node_ids": ["placeholder-services", "placeholder-repositories", "feature-testing"]
+    }
+  ],
+  "open_questions": [
+    "Services and repositories directories are empty — business logic lives fully in route handlers. Should it be refactored?",
+    "Test suite runs again after the pytest_asyncio fixture fix, but coverage is still minimal and does not exercise reports or exam access rules.",
+    "Exam timer relies on client clock sync with server — no server-time compensation implemented.",
+    "Docker startup still logs an Alembic revision mismatch (missing revision 371f4658a015) even though the application boots.",
+    "Result screen references attempt.result but Attempt schema may not include nested result in response."
+  ]
+}

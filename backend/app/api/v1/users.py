@@ -1,10 +1,10 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from pydantic.networks import EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.api import deps
 from app.core.config import settings
@@ -19,12 +19,23 @@ async def read_users(
     db: AsyncSession = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(deps.get_current_active_superuser),
+    role: Optional[UserRole] = None,
+    q: Optional[str] = None,
+    current_user: User = Depends(deps.get_current_active_examiner),
 ) -> Any:
     """
-    Retrieve users.
+    Retrieve users for management or assignment lookups.
     """
-    result = await db.execute(select(User).offset(skip).limit(limit))
+    stmt = select(User)
+
+    if role is not None:
+        stmt = stmt.filter(User.role == role)
+
+    if q:
+        like_value = f"%{q.strip()}%"
+        stmt = stmt.filter(or_(User.name.ilike(like_value), User.email.ilike(like_value)))
+
+    result = await db.execute(stmt.order_by(User.name.is_(None), User.name.asc(), User.email.asc()).offset(skip).limit(limit))
     return result.scalars().all()
 
 

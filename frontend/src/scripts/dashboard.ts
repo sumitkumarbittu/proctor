@@ -1,17 +1,26 @@
 import { apiFetch } from './api';
 import {
-    removeAuthToken,
-    getUserInitials,
-    showToast,
     escapeHtml,
     getStatusBadgeClass,
+    getUserInitials,
+    removeAuthToken,
+    showToast,
 } from './utils';
 
 let currentUser: any = null;
 let editingExamId: number | null = null;
 let editingUserId: number | null = null;
-
 const views = ['exams', 'results', 'users', 'questions', 'reports'] as const;
+const REFRESH_INTERVAL_MS = 10000;
+let activeView: (typeof views)[number] = 'exams';
+let activeExamDetailId: number | null = null;
+let refreshTimer: number | null = null;
+let questionFolders: any[] = [];
+let selectedQuestionFolderId: number | null = null;
+
+function isStaffUser() {
+    return currentUser?.role === 'admin' || currentUser?.role === 'examiner';
+}
 
 function renderEmptyState(icon: string, title: string, description: string): string {
     return `
@@ -30,37 +39,17 @@ function toggleBodyModalState() {
     document.body.classList.toggle('modal-open', hasActiveModal);
 }
 
-async function initDashboard() {
-    document.getElementById('logout-btn')?.addEventListener('click', () => {
-        removeAuthToken();
-        window.location.href = '/';
-    });
+function openModal(id: string) {
+    document.getElementById(id)?.classList.add('active');
+    toggleBodyModalState();
+}
 
-    try {
-        currentUser = await apiFetch('/users/me');
-        renderUserInfo();
-        setupNavigation();
-        setupModals();
-
-        const isAdmin = currentUser.role === 'admin' || currentUser.role === 'examiner';
-        if (isAdmin) {
-            document.getElementById('admin-nav')?.classList.remove('hidden');
-            document.getElementById('admin-controls')?.classList.remove('hidden');
-            void loadAdminStats();
-        }
-
-        await loadExams();
-    } catch (error: any) {
-        showToast(error.message || 'Failed to load the dashboard.', 'error');
-        const examList = document.getElementById('exam-list');
-        if (examList) {
-            examList.innerHTML = renderEmptyState(
-                '!',
-                'Unable to load dashboard',
-                'Please refresh the page or try again in a moment.',
-            );
-        }
+function closeModal(id: string) {
+    document.getElementById(id)?.classList.remove('active');
+    if (id === 'exam-detail-modal') {
+        activeExamDetailId = null;
     }
+    toggleBodyModalState();
 }
 
 function renderUserInfo() {
@@ -75,18 +64,47 @@ function renderUserInfo() {
     if (userAvatar) userAvatar.textContent = getUserInitials(currentUser.name, currentUser.email);
 }
 
+function startAutoRefresh() {
+    if (refreshTimer) {
+        window.clearInterval(refreshTimer);
+    }
+
+    refreshTimer = window.setInterval(() => {
+        void refreshActiveView(true);
+    }, REFRESH_INTERVAL_MS);
+}
+
+async function refreshActiveView(silent = false) {
+    if (isStaffUser()) {
+        await loadAdminStats(silent);
+    }
+
+    if (activeView === 'exams') await loadExams(silent);
+    if (activeView === 'results') await loadResults(silent);
+    if (activeView === 'users' && currentUser.role === 'admin') await loadUsers(silent);
+    if (activeView === 'questions' && isStaffUser()) await loadQuestions(silent);
+    if (activeView === 'reports' && isStaffUser()) await loadReports(silent);
+
+    const examDetailModal = document.getElementById('exam-detail-modal');
+    if (activeExamDetailId && examDetailModal?.classList.contains('active')) {
+        await openExamDetail(activeExamDetailId, { keepOpen: true, silent });
+    }
+}
+
 function setupNavigation() {
     document.querySelectorAll<HTMLElement>('.nav-link[data-view]').forEach((link) => {
         link.addEventListener('click', (event) => {
             event.preventDefault();
-            const view = link.dataset.view;
+            const view = link.dataset.view as (typeof views)[number] | undefined;
             if (!view) return;
-            switchView(view);
+            void switchView(view);
         });
     });
 }
 
-function switchView(view: string) {
+async function switchView(view: (typeof views)[number]) {
+    activeView = view;
+
     document.querySelectorAll('.nav-link[data-view]').forEach((link) => {
         link.classList.toggle('active', (link as HTMLElement).dataset.view === view);
     });
@@ -95,11 +113,7 @@ function switchView(view: string) {
         document.getElementById(`view-${name}`)?.classList.toggle('hidden', name !== view);
     });
 
-    if (view === 'exams') void loadExams();
-    if (view === 'results') void loadResults();
-    if (view === 'users') void loadUsers();
-    if (view === 'questions') void loadQuestions();
-    if (view === 'reports') void loadReports();
+    await refreshActiveView(false);
 }
 
 function setupModals() {
@@ -125,10 +139,14 @@ function setupModals() {
 
     document.getElementById('create-exam-btn')?.addEventListener('click', () => openExamModal());
     document.getElementById('create-user-btn')?.addEventListener('click', () => openUserModal());
-    document.getElementById('create-question-btn')?.addEventListener('click', () => openQuestionModal());
+    document
+        .getElementById('create-question-btn')
+        ?.addEventListener('click', () => void openQuestionModal());
+    document.getElementById('create-folder-btn')?.addEventListener('click', () => openFolderModal());
     document.getElementById('exam-form')?.addEventListener('submit', handleExamSubmit);
     document.getElementById('user-form')?.addEventListener('submit', handleUserSubmit);
     document.getElementById('question-form')?.addEventListener('submit', handleQuestionSubmit);
+    document.getElementById('folder-form')?.addEventListener('submit', handleFolderSubmit);
     document.getElementById('q-type')?.addEventListener('change', (event) => {
         const value = (event.target as HTMLSelectElement).value;
         const optionsSection = document.getElementById('mcq-options-section');
@@ -138,19 +156,44 @@ function setupModals() {
     });
 }
 
-function openModal(id: string) {
-    document.getElementById(id)?.classList.add('active');
-    toggleBodyModalState();
+async function initDashboard() {
+    document.getElementById('logout-btn')?.addEventListener('click', () => {
+        removeAuthToken();
+        window.location.href = '/';
+    });
+
+    try {
+        currentUser = await apiFetch('/users/me');
+        renderUserInfo();
+        setupNavigation();
+        setupModals();
+
+        if (isStaffUser()) {
+            document.getElementById('admin-nav')?.classList.remove('hidden');
+            document.getElementById('admin-controls')?.classList.remove('hidden');
+        }
+
+        await refreshActiveView(false);
+        startAutoRefresh();
+    } catch (error: any) {
+        showToast(error.message || 'Failed to load the dashboard.', 'error');
+        const examList = document.getElementById('exam-list');
+        if (examList) {
+            examList.innerHTML = renderEmptyState(
+                '!',
+                'Unable to load dashboard',
+                'Please refresh the page or try again in a moment.',
+            );
+        }
+    }
 }
 
-function closeModal(id: string) {
-    document.getElementById(id)?.classList.remove('active');
-    toggleBodyModalState();
-}
+async function loadAdminStats(silent = false) {
+    if (!isStaffUser()) return;
 
-async function loadAdminStats() {
     try {
         const stats = await apiFetch<any>('/reports/dashboard');
+        const overview = stats.overview || stats;
         const statsBar = document.getElementById('stats-bar');
         if (!statsBar) return;
 
@@ -158,31 +201,33 @@ async function loadAdminStats() {
         statsBar.innerHTML = `
             <div class="stat-card blue animate-in">
                 <div class="stat-card-icon">EX</div>
-                <div class="stat-card-value">${stats.total_exams}</div>
-                <div class="stat-card-label">Total Exams</div>
+                <div class="stat-card-value">${overview.total_exams}</div>
+                <div class="stat-card-label">Visible Exams</div>
             </div>
             <div class="stat-card green animate-in" style="animation-delay: 40ms;">
-                <div class="stat-card-icon">US</div>
-                <div class="stat-card-value">${stats.total_users}</div>
-                <div class="stat-card-label">Users</div>
+                <div class="stat-card-icon">LV</div>
+                <div class="stat-card-value">${overview.live_exams}</div>
+                <div class="stat-card-label">Live Exams</div>
             </div>
             <div class="stat-card amber animate-in" style="animation-delay: 80ms;">
                 <div class="stat-card-icon">AT</div>
-                <div class="stat-card-value">${stats.total_attempts}</div>
+                <div class="stat-card-value">${overview.total_attempts}</div>
                 <div class="stat-card-label">Attempts</div>
             </div>
             <div class="stat-card rose animate-in" style="animation-delay: 120ms;">
                 <div class="stat-card-icon">RV</div>
-                <div class="stat-card-value">${stats.pending_evaluation}</div>
+                <div class="stat-card-value">${overview.pending_evaluation}</div>
                 <div class="stat-card-label">Pending Review</div>
             </div>
         `;
-    } catch {
-        // Keep the dashboard usable even if stats fail.
+    } catch (error: any) {
+        if (!silent) {
+            showToast(error.message || 'Failed to load dashboard stats.', 'error');
+        }
     }
 }
 
-async function loadExams() {
+async function loadExams(silent = false) {
     const list = document.getElementById('exam-list');
     if (!list) return;
 
@@ -194,7 +239,9 @@ async function loadExams() {
             list.innerHTML = renderEmptyState(
                 'EX',
                 'No exams yet',
-                'Create your first exam or wait for an assignment to appear here.',
+                isStaffUser()
+                    ? 'Create your first exam or wait for a collaborator to assign one.'
+                    : 'Assigned exams will appear here when they are ready.',
             );
             return;
         }
@@ -202,24 +249,40 @@ async function loadExams() {
         exams.forEach((exam, index) => {
             const card = document.createElement('div');
             card.className = 'card card-interactive exam-card animate-in';
-            card.style.animationDelay = `${index * 50}ms`;
+            card.style.animationDelay = `${index * 45}ms`;
 
-            const isAdmin = currentUser.role !== 'student';
+            const staffMeta = isStaffUser()
+                ? `
+                    <span>${exam.teacher_assignments?.length || 0} teachers</span>
+                    <span>${exam.assignments?.length || 0} students</span>
+                `
+                : `<span>${exam.questions?.length || 0} questions</span>`;
+
             card.innerHTML = `
                 <div class="exam-card-header">
                     <div>
                         <h3>${escapeHtml(exam.title)}</h3>
                         <p class="helper-text">${escapeHtml(exam.instructions || 'No instructions added yet.')}</p>
                     </div>
-                    <span class="badge ${getStatusBadgeClass(exam.status)}">${exam.status}</span>
+                    <span class="badge ${getStatusBadgeClass(exam.status)}">${escapeHtml(exam.status)}</span>
                 </div>
                 <div class="exam-card-meta">
                     <span>${exam.duration_minutes} min</span>
                     <span>${exam.questions?.length || 0} questions</span>
+                    ${staffMeta}
                 </div>
+                ${
+                    isStaffUser()
+                        ? `
+                            <div class="helper-text">
+                                Created by ${escapeHtml(exam.creator?.name || exam.creator?.email || 'Team')}
+                            </div>
+                        `
+                        : ''
+                }
                 <div class="exam-card-actions">
                     ${
-                        isAdmin
+                        isStaffUser()
                             ? `
                                 <div class="flex gap-xs">
                                     <button class="icon-btn edit-exam" data-id="${exam.id}" title="Edit exam">✎</button>
@@ -239,11 +302,16 @@ async function loadExams() {
 
         attachExamListeners();
     } catch (error: any) {
-        list.innerHTML = renderEmptyState(
-            '!',
-            'Unable to load exams',
-            error.message || 'Please try again in a moment.',
-        );
+        if (!silent) {
+            showToast(error.message || 'Unable to load exams.', 'error');
+        }
+        if (!list.innerHTML.trim()) {
+            list.innerHTML = renderEmptyState(
+                '!',
+                'Unable to load exams',
+                error.message || 'Please try again in a moment.',
+            );
+        }
     }
 }
 
@@ -263,7 +331,7 @@ function attachExamListeners() {
                 return;
             }
 
-            void openExamDetail(Number.parseInt(id, 10));
+            await openExamDetail(Number.parseInt(id, 10));
         });
     });
 
@@ -289,8 +357,7 @@ function attachExamListeners() {
             try {
                 await apiFetch(`/exams/${id}`, { method: 'DELETE' });
                 showToast('Exam deleted.', 'success');
-                await loadExams();
-                await loadAdminStats();
+                await refreshActiveView(true);
             } catch (error: any) {
                 showToast(error.message, 'error');
             }
@@ -355,19 +422,179 @@ async function handleExamSubmit(event: Event) {
         }
 
         closeModal('exam-modal');
-        await loadExams();
-        await loadAdminStats();
+        await refreshActiveView(true);
     } catch (error: any) {
         showToast(error.message, 'error');
     }
 }
 
-async function openExamDetail(examId: number) {
+function renderAvailableQuestionRows(examId: number, questions: any[]) {
+    if (!questions.length) {
+        return '<p class="text-sm text-muted">No additional accessible questions available.</p>';
+    }
+
+    return questions
+        .map(
+            (question: any) => `
+                <div class="detail-row">
+                    <div class="flex flex-col gap-xs">
+                        <span class="text-sm">${escapeHtml(question.prompt.substring(0, 110))}</span>
+                        <span class="helper-text">
+                            ${escapeHtml(question.folder?.name || 'Unfiled')} • ${escapeHtml(
+                                question.owner?.name || question.owner?.email || 'Shared bank',
+                            )}
+                        </span>
+                    </div>
+                    <button class="btn btn-primary btn-sm add-q-to-exam" data-exam="${examId}" data-qid="${question.id}">
+                        Add
+                    </button>
+                </div>
+            `,
+        )
+        .join('');
+}
+
+function renderAssignmentChecklist(
+    users: any[],
+    selectedIds: Set<number>,
+    type: 'teacher' | 'student',
+) {
+    if (!users.length) {
+        return `<p class="text-sm text-muted">No ${type}s available.</p>`;
+    }
+
+    return `
+        <div class="assignment-grid">
+            ${users
+                .map(
+                    (user) => `
+                        <label class="assignment-option">
+                            <input
+                                type="checkbox"
+                                class="assign-${type}"
+                                value="${user.id}"
+                                ${selectedIds.has(user.id) ? 'checked' : ''}
+                            >
+                            <div>
+                                <strong>${escapeHtml(user.name || user.email)}</strong>
+                                <p class="helper-text">${escapeHtml(user.email)}</p>
+                            </div>
+                        </label>
+                    `,
+                )
+                .join('')}
+        </div>
+    `;
+}
+
+function renderExamQuestions(exam: any): string {
+    if (!exam.questions?.length) {
+        return '<p class="text-sm text-muted">No questions added yet.</p>';
+    }
+
+    return exam.questions
+        .map((entry: any) => {
+            const question = entry.question || entry;
+            return `
+                <div class="detail-row">
+                    <div class="flex flex-col gap-xs">
+                        <div class="flex items-center gap-sm">
+                            <span class="badge badge-info">${question.type || 'MCQ'}</span>
+                            <span class="chip">${question.marks || 1} marks</span>
+                            ${
+                                question.folder?.name
+                                    ? `<span class="chip">${escapeHtml(question.folder.name)}</span>`
+                                    : ''
+                            }
+                        </div>
+                        <span class="text-sm">${escapeHtml((question.prompt || '').substring(0, 110))}</span>
+                    </div>
+                    <button class="icon-btn danger remove-q" data-exam="${exam.id}" data-qid="${entry.question_id}" title="Remove question">
+                        ×
+                    </button>
+                </div>
+            `;
+        })
+        .join('');
+}
+
+function renderAttemptsList(attempts: any[]): string {
+    if (!attempts.length) {
+        return renderEmptyState('AT', 'No attempts yet', 'Attempts will appear here once students start.');
+    }
+
+    return `
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>Score</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${attempts
+                    .map(
+                        (attempt) => `
+                            <tr>
+                                <td class="table-primary">${escapeHtml(
+                                    attempt.student?.name || attempt.student?.email || `Student #${attempt.student_id}`,
+                                )}</td>
+                                <td><span class="badge ${getStatusBadgeClass(attempt.status)}">${attempt.status}</span></td>
+                                <td class="text-sm">${new Date(attempt.started_at).toLocaleString()}</td>
+                                <td>
+                                    ${
+                                        attempt.result
+                                            ? `${attempt.result.total_score}/${attempt.result.max_score}`
+                                            : '—'
+                                    }
+                                </td>
+                                <td>
+                                    <div class="flex gap-xs">
+                                        ${
+                                            attempt.status === 'SUBMITTED'
+                                                ? `<button class="btn btn-sm btn-success evaluate-btn" data-id="${attempt.id}">Evaluate</button>`
+                                                : ''
+                                        }
+                                        ${
+                                            attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED'
+                                                ? `<a class="btn btn-ghost btn-sm" href="/result.html?attempt_id=${attempt.id}">Open report</a>`
+                                                : '<span class="text-sm text-muted">In progress</span>'
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        `,
+                    )
+                    .join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function openExamDetail(
+    examId: number,
+    options: { keepOpen?: boolean; silent?: boolean } = {},
+) {
+    const { keepOpen = false, silent = false } = options;
+
     try {
-        const [exam, questions, attempts] = await Promise.all([
-            apiFetch<any>(`/exams/${examId}`),
-            apiFetch<any[]>('/exams/questions').catch(() => []),
-            apiFetch<any[]>(`/attempts/exam/${examId}`).catch(() => []),
+        activeExamDetailId = examId;
+
+        const examPromise = apiFetch<any>(`/exams/${examId}`);
+        const questionsPromise = apiFetch<any[]>('/exams/questions').catch(() => []);
+        const attemptsPromise = apiFetch<any[]>(`/attempts/exam/${examId}`).catch(() => []);
+        const teachersPromise = apiFetch<any[]>('/users/?role=examiner').catch(() => []);
+        const studentsPromise = apiFetch<any[]>('/users/?role=student').catch(() => []);
+
+        const [exam, questions, attempts, teachers, students] = await Promise.all([
+            examPromise,
+            questionsPromise,
+            attemptsPromise,
+            teachersPromise,
+            studentsPromise,
         ]);
 
         const content = document.getElementById('exam-detail-content');
@@ -376,7 +603,13 @@ async function openExamDetail(examId: number) {
 
         title.textContent = exam.title;
 
-        const assignedQuestionIds = (exam.questions || []).map((question: any) => question.question_id);
+        const selectedTeacherIds: Set<number> = new Set(
+            (exam.teacher_assignments || []).map((assignment: any) => assignment.teacher_id),
+        );
+        const selectedStudentIds: Set<number> = new Set(
+            (exam.assignments || []).map((assignment: any) => assignment.student_id),
+        );
+        const assignedQuestionIds = (exam.questions || []).map((entry: any) => entry.question_id);
         const availableQuestions = questions.filter(
             (question: any) => !assignedQuestionIds.includes(question.id),
         );
@@ -385,38 +618,40 @@ async function openExamDetail(examId: number) {
             <div class="tabs">
                 <button class="tab active" data-tab="questions">Questions (${exam.questions?.length || 0})</button>
                 <button class="tab" data-tab="attempts">Attempts (${attempts.length})</button>
-                <button class="tab" data-tab="assign">Assign</button>
+                <button class="tab" data-tab="assign">Assignments</button>
             </div>
 
             <div id="tab-questions">
                 ${renderExamQuestions(exam)}
                 <div class="detail-divider"></div>
                 <div class="section-title mb-1">Add From Question Bank</div>
-                ${
-                    availableQuestions.length
-                        ? availableQuestions
-                              .map(
-                                  (question: any) => `
-                                    <div class="detail-row">
-                                        <span class="text-sm">${escapeHtml(question.prompt.substring(0, 90))}</span>
-                                        <button class="btn btn-primary btn-sm add-q-to-exam" data-exam="${examId}" data-qid="${question.id}">
-                                            Add
-                                        </button>
-                                    </div>
-                                `,
-                              )
-                              .join('')
-                        : '<p class="text-sm text-muted">No additional questions available.</p>'
-                }
+                ${renderAvailableQuestionRows(examId, availableQuestions)}
             </div>
 
-            <div id="tab-attempts" class="hidden">${renderAttemptsList(attempts)}</div>
+            <div id="tab-attempts" class="hidden">
+                ${renderAttemptsList(attempts)}
+            </div>
 
             <div id="tab-assign" class="hidden">
-                <p class="text-sm text-muted mb-2">Enter student IDs as a comma-separated list.</p>
-                <div class="assign-row">
-                    <input type="text" id="assign-ids" class="input" placeholder="1, 2, 3">
-                    <button class="btn btn-primary" id="assign-btn">Assign</button>
+                <div class="stack-list">
+                    <div class="card" style="padding: 1rem;">
+                        <div class="section-title mb-1">Teachers</div>
+                        <p class="helper-text mb-2">
+                            Assigned teachers can see this exam, manage questions, and review attempts.
+                        </p>
+                        ${renderAssignmentChecklist(teachers, selectedTeacherIds, 'teacher')}
+                    </div>
+                    <div class="card" style="padding: 1rem;">
+                        <div class="section-title mb-1">Students</div>
+                        <p class="helper-text mb-2">
+                            Assigned students will see the exam on their dashboard once it becomes available.
+                        </p>
+                        ${renderAssignmentChecklist(students, selectedStudentIds, 'student')}
+                    </div>
+                    <div class="flex items-center justify-between gap-sm">
+                        <p class="helper-text">Question folders used in this exam will be shared to assigned teachers automatically.</p>
+                        <button class="btn btn-primary" id="assign-btn">Save assignments</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -428,9 +663,7 @@ async function openExamDetail(examId: number) {
 
                 const tabName = tab.dataset.tab;
                 ['questions', 'attempts', 'assign'].forEach((name) => {
-                    document
-                        .getElementById(`tab-${name}`)
-                        ?.classList.toggle('hidden', name !== tabName);
+                    content.querySelector<HTMLElement>(`#tab-${name}`)?.classList.toggle('hidden', name !== tabName);
                 });
             });
         });
@@ -444,7 +677,8 @@ async function openExamDetail(examId: number) {
                 try {
                     await apiFetch(`/exams/${examIdValue}/questions/${questionId}`, { method: 'POST' });
                     showToast('Question added to exam.', 'success');
-                    await openExamDetail(examId);
+                    await openExamDetail(examId, { keepOpen: true });
+                    await loadQuestions(true);
                 } catch (error: any) {
                     showToast(error.message, 'error');
                 }
@@ -460,7 +694,7 @@ async function openExamDetail(examId: number) {
                 try {
                     await apiFetch(`/exams/${examIdValue}/questions/${questionId}`, { method: 'DELETE' });
                     showToast('Question removed from exam.', 'success');
-                    await openExamDetail(examId);
+                    await openExamDetail(examId, { keepOpen: true });
                 } catch (error: any) {
                     showToast(error.message, 'error');
                 }
@@ -477,112 +711,45 @@ async function openExamDetail(examId: number) {
                         method: 'POST',
                     });
                     showToast(`Evaluated: ${result.score}/${result.max_score}`, 'success');
-                    await openExamDetail(examId);
+                    await openExamDetail(examId, { keepOpen: true });
                 } catch (error: any) {
                     showToast(error.message, 'error');
                 }
             });
         });
 
-        const assignButton = content.querySelector<HTMLButtonElement>('#assign-btn');
-        assignButton?.addEventListener('click', async () => {
-            const assignInput = content.querySelector<HTMLInputElement>('#assign-ids');
-            const ids =
-                assignInput?.value
-                    .split(',')
-                    .map((value) => Number.parseInt(value.trim(), 10))
-                    .filter((value) => !Number.isNaN(value)) || [];
-
-            if (!ids.length) {
-                showToast('Enter at least one valid student ID.', 'warning');
-                return;
-            }
+        content.querySelector<HTMLButtonElement>('#assign-btn')?.addEventListener('click', async () => {
+            const teacherIds = Array.from(
+                content.querySelectorAll<HTMLInputElement>('.assign-teacher:checked'),
+            ).map((input) => Number.parseInt(input.value, 10));
+            const studentIds = Array.from(
+                content.querySelectorAll<HTMLInputElement>('.assign-student:checked'),
+            ).map((input) => Number.parseInt(input.value, 10));
 
             try {
                 await apiFetch(`/exams/${examId}/assign`, {
                     method: 'POST',
-                    body: JSON.stringify({ student_ids: ids }),
+                    body: JSON.stringify({ teacher_ids: teacherIds, student_ids: studentIds }),
                 });
-                showToast('Students assigned.', 'success');
+                showToast('Assignments updated.', 'success');
+                await openExamDetail(examId, { keepOpen: true });
+                await loadExams(true);
             } catch (error: any) {
                 showToast(error.message, 'error');
             }
         });
 
-        openModal('exam-detail-modal');
+        if (!keepOpen) {
+            openModal('exam-detail-modal');
+        }
     } catch (error: any) {
-        showToast(error.message, 'error');
+        if (!silent) {
+            showToast(error.message, 'error');
+        }
     }
 }
 
-function renderExamQuestions(exam: any): string {
-    if (!exam.questions?.length) {
-        return '<p class="text-sm text-muted">No questions added yet.</p>';
-    }
-
-    return exam.questions
-        .map((entry: any) => {
-            const question = entry.question || entry;
-            return `
-                <div class="detail-row">
-                    <div class="flex items-center gap-sm">
-                        <span class="badge badge-info">${question.type || 'MCQ'}</span>
-                        <span class="text-sm">${escapeHtml((question.prompt || '').substring(0, 80))}</span>
-                    </div>
-                    <div class="flex items-center gap-sm">
-                        <span class="chip">${question.marks || 1} marks</span>
-                        <button class="icon-btn danger remove-q" data-exam="${exam.id}" data-qid="${entry.question_id}" title="Remove question">
-                            ×
-                        </button>
-                    </div>
-                </div>
-            `;
-        })
-        .join('');
-}
-
-function renderAttemptsList(attempts: any[]): string {
-    if (!attempts.length) {
-        return renderEmptyState('AT', 'No attempts yet', 'Attempts will appear here once students start.');
-    }
-
-    return `
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Status</th>
-                    <th>Started</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${attempts
-                    .map(
-                        (attempt) => `
-                            <tr>
-                                <td>#${attempt.id}</td>
-                                <td><span class="badge ${getStatusBadgeClass(attempt.status)}">${attempt.status}</span></td>
-                                <td class="text-sm">${new Date(attempt.started_at).toLocaleString()}</td>
-                                <td>
-                                    ${
-                                        attempt.status === 'SUBMITTED'
-                                            ? `<button class="btn btn-sm btn-success evaluate-btn" data-id="${attempt.id}">Evaluate</button>`
-                                            : attempt.status === 'EVALUATED'
-                                              ? '<span class="text-sm text-muted">Done</span>'
-                                              : '<span class="text-sm text-muted">In progress</span>'
-                                    }
-                                </td>
-                            </tr>
-                        `,
-                    )
-                    .join('')}
-            </tbody>
-        </table>
-    `;
-}
-
-async function loadUsers() {
+async function loadUsers(silent = false) {
     const tbody = document.getElementById('users-tbody');
     if (!tbody) return;
 
@@ -628,7 +795,9 @@ async function loadUsers() {
 
         attachUserListeners();
     } catch (error: any) {
-        showToast(error.message, 'error');
+        if (!silent) {
+            showToast(error.message, 'error');
+        }
     }
 }
 
@@ -652,8 +821,8 @@ function attachUserListeners() {
             try {
                 await apiFetch(`/users/${id}`, { method: 'DELETE' });
                 showToast('User deleted.', 'success');
-                await loadUsers();
-                await loadAdminStats();
+                await loadUsers(true);
+                await loadAdminStats(true);
             } catch (error: any) {
                 showToast(error.message, 'error');
             }
@@ -717,25 +886,111 @@ async function handleUserSubmit(event: Event) {
         }
 
         closeModal('user-modal');
-        await loadUsers();
-        await loadAdminStats();
+        await loadUsers(true);
+        await loadAdminStats(true);
     } catch (error: any) {
         showToast(error.message, 'error');
     }
 }
 
-async function loadQuestions() {
+async function loadQuestionFolders() {
+    if (!isStaffUser()) return [];
+    questionFolders = await apiFetch<any[]>('/exams/question-folders');
+
+    if (selectedQuestionFolderId && !questionFolders.some((folder) => folder.id === selectedQuestionFolderId)) {
+        selectedQuestionFolderId = null;
+    }
+
+    return questionFolders;
+}
+
+function populateQuestionFolderSelect() {
+    const folderSelect = document.getElementById('q-folder') as HTMLSelectElement | null;
+    if (!folderSelect) return;
+
+    folderSelect.innerHTML = questionFolders
+        .map(
+            (folder) => `
+                <option value="${folder.id}">
+                    ${folder.name}${folder.access_level === 'shared' ? ' (Shared)' : ''}
+                </option>
+            `,
+        )
+        .join('');
+
+    if (!questionFolders.length) {
+        folderSelect.innerHTML = '<option value="">Create a folder first</option>';
+    }
+}
+
+function renderQuestionFolderToolbar() {
+    const toolbar = document.getElementById('question-folder-toolbar');
+    if (!toolbar) return;
+
+    if (!questionFolders.length) {
+        toolbar.innerHTML = renderEmptyState(
+            'FD',
+            'No folders yet',
+            'Create your first question folder to organize a personal or shared question bank.',
+        );
+        return;
+    }
+
+    toolbar.innerHTML = `
+        <div class="card" style="padding: 1rem;">
+            <div class="section-title mb-1">Folder Filter</div>
+            <div class="flex gap-xs" style="flex-wrap: wrap;">
+                <button class="btn btn-sm ${selectedQuestionFolderId === null ? 'btn-primary' : 'btn-ghost'} folder-filter" data-folder="">
+                    All folders
+                </button>
+                ${questionFolders
+                    .map(
+                        (folder) => `
+                            <button
+                                class="btn btn-sm ${
+                                    selectedQuestionFolderId === folder.id ? 'btn-primary' : 'btn-ghost'
+                                } folder-filter"
+                                data-folder="${folder.id}"
+                            >
+                                ${escapeHtml(folder.name)}
+                                ${folder.access_level === 'shared' ? ' • Shared' : ''}
+                            </button>
+                        `,
+                    )
+                    .join('')}
+            </div>
+        </div>
+    `;
+
+    toolbar.querySelectorAll<HTMLElement>('.folder-filter').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const folderValue = button.dataset.folder;
+            selectedQuestionFolderId =
+                folderValue && folderValue.trim()
+                    ? Number.parseInt(folderValue, 10)
+                    : null;
+            await loadQuestions(true);
+        });
+    });
+}
+
+async function loadQuestions(silent = false) {
     const list = document.getElementById('questions-list');
     if (!list) return;
 
     try {
-        const questions = await apiFetch<any[]>('/exams/questions');
+        await loadQuestionFolders();
+        renderQuestionFolderToolbar();
+        populateQuestionFolderSelect();
+
+        const query = selectedQuestionFolderId ? `?folder_id=${selectedQuestionFolderId}` : '';
+        const questions = await apiFetch<any[]>(`/exams/questions${query}`);
 
         if (!questions.length) {
             list.innerHTML = renderEmptyState(
                 'QB',
                 'No questions yet',
-                'Build your question bank here for reuse across exams.',
+                'Build your question bank here for reuse across exams and collaborator assignments.',
             );
             return;
         }
@@ -743,11 +998,16 @@ async function loadQuestions() {
         list.innerHTML = questions
             .map(
                 (question, index) => `
-                    <div class="card question-card animate-in" style="animation-delay: ${index * 40}ms;">
+                    <div class="card question-card animate-in" style="animation-delay: ${index * 35}ms;">
                         <div class="question-card-header">
                             <div class="flex items-center gap-sm">
                                 <span class="badge ${question.type === 'MCQ' ? 'badge-primary' : 'badge-purple'}">${question.type}</span>
                                 <span class="chip">${question.marks} marks</span>
+                                ${
+                                    question.folder?.name
+                                        ? `<span class="chip">${escapeHtml(question.folder.name)}</span>`
+                                        : ''
+                                }
                             </div>
                             <button class="icon-btn danger delete-question" data-id="${question.id}" title="Delete question">×</button>
                         </div>
@@ -763,6 +1023,14 @@ async function loadQuestions() {
                                 `
                                 : ''
                         }
+                        <p class="helper-text mt-2">
+                            ${escapeHtml(question.owner?.name || question.owner?.email || 'Personal bank')}
+                            ${
+                                question.folder?.access_level === 'shared'
+                                    ? ' • Shared to you through a collaborator folder'
+                                    : ''
+                            }
+                        </p>
                     </div>
                 `,
             )
@@ -776,29 +1044,86 @@ async function loadQuestions() {
                 try {
                     await apiFetch(`/exams/questions/${id}`, { method: 'DELETE' });
                     showToast('Question deleted.', 'success');
-                    await loadQuestions();
+                    await loadQuestions(true);
                 } catch (error: any) {
                     showToast(error.message, 'error');
                 }
             });
         });
     } catch (error: any) {
+        if (!silent) {
+            showToast(error.message, 'error');
+        }
+        list.innerHTML = renderEmptyState(
+            '!',
+            'Question bank unavailable',
+            error.message || 'Please try again in a moment.',
+        );
+    }
+}
+
+function openFolderModal() {
+    const title = document.getElementById('folder-modal-title');
+    const submitButton = document.getElementById('folder-submit-btn');
+    const name = document.getElementById('folder-name') as HTMLInputElement | null;
+    const description = document.getElementById('folder-description') as HTMLTextAreaElement | null;
+
+    if (title) title.textContent = 'Create Folder';
+    if (submitButton) submitButton.textContent = 'Create Folder';
+    if (name) name.value = '';
+    if (description) description.value = '';
+
+    openModal('folder-modal');
+}
+
+async function handleFolderSubmit(event: Event) {
+    event.preventDefault();
+
+    const body = {
+        name: (document.getElementById('folder-name') as HTMLInputElement).value,
+        description: (document.getElementById('folder-description') as HTMLTextAreaElement).value,
+    };
+
+    try {
+        await apiFetch('/exams/question-folders', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+        showToast('Folder created.', 'success');
+        closeModal('folder-modal');
+        await loadQuestions(true);
+    } catch (error: any) {
         showToast(error.message, 'error');
     }
 }
 
-function openQuestionModal() {
+async function openQuestionModal() {
+    await loadQuestionFolders();
+
+    if (!questionFolders.length) {
+        showToast('Create a question folder before adding questions.', 'warning');
+        openFolderModal();
+        return;
+    }
+
+    populateQuestionFolderSelect();
+
     const title = document.getElementById('question-modal-title');
     const type = document.getElementById('q-type') as HTMLSelectElement | null;
     const prompt = document.getElementById('q-prompt') as HTMLTextAreaElement | null;
     const marks = document.getElementById('q-marks') as HTMLInputElement | null;
     const correct = document.getElementById('q-correct') as HTMLInputElement | null;
+    const folder = document.getElementById('q-folder') as HTMLSelectElement | null;
 
     if (title) title.textContent = 'Add Question';
     if (type) type.value = 'MCQ';
     if (prompt) prompt.value = '';
     if (marks) marks.value = '1';
     if (correct) correct.value = '';
+    if (folder) {
+        const preferredFolderId = selectedQuestionFolderId || questionFolders[0]?.id;
+        folder.value = preferredFolderId ? preferredFolderId.toString() : '';
+    }
 
     document.querySelectorAll<HTMLInputElement>('.mcq-option').forEach((input) => {
         input.value = '';
@@ -814,10 +1139,12 @@ async function handleQuestionSubmit(event: Event) {
     event.preventDefault();
 
     const type = (document.getElementById('q-type') as HTMLSelectElement).value;
+    const folderId = Number.parseInt((document.getElementById('q-folder') as HTMLSelectElement).value, 10);
     const body: any = {
         type,
         prompt: (document.getElementById('q-prompt') as HTMLTextAreaElement).value,
         marks: Number.parseInt((document.getElementById('q-marks') as HTMLInputElement).value, 10),
+        folder_id: Number.isNaN(folderId) ? undefined : folderId,
     };
 
     if (type === 'MCQ') {
@@ -834,18 +1161,65 @@ async function handleQuestionSubmit(event: Event) {
         });
         showToast('Question created.', 'success');
         closeModal('question-modal');
-        await loadQuestions();
+        await loadQuestions(true);
     } catch (error: any) {
         showToast(error.message, 'error');
     }
 }
 
-async function loadResults() {
+function renderStudentResultsSummary(summary: any): string {
+    const overview = summary?.overview || {};
+
+    return `
+        <section class="card report-hero animate-in">
+            <div class="report-panel-header">
+                <div>
+                    <span class="section-title">Student Analytics</span>
+                    <h3 class="panel-title">Your progress across submitted and evaluated exams</h3>
+                </div>
+                <p class="report-panel-copy">
+                    This personal view updates automatically as new results are evaluated.
+                </p>
+            </div>
+
+            <div class="report-kpi-grid compact">
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Attempts</span>
+                    <strong class="report-kpi-value">${overview.attempt_count || 0}</strong>
+                    <span class="report-kpi-note">${overview.evaluated_count || 0} evaluated</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Average Score</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.average_percentage)}</strong>
+                    <span class="report-kpi-note">Best ${formatPercent(overview.best_percentage)}</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Integrity Flags</span>
+                    <strong class="report-kpi-value">${overview.total_flags || 0}</strong>
+                    <span class="report-kpi-note">Across all attempts</span>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+async function loadResults(silent = false) {
     const list = document.getElementById('results-list');
-    if (!list) return;
+    const summary = document.getElementById('results-summary');
+    if (!list || !summary) return;
 
     try {
-        const attempts = await apiFetch<any[]>('/attempts/');
+        const studentSummaryPromise =
+            currentUser.role === 'student'
+                ? apiFetch<any>('/reports/student/me').catch(() => null)
+                : Promise.resolve(null);
+        const [attempts, studentSummary] = await Promise.all([
+            apiFetch<any[]>('/attempts/'),
+            studentSummaryPromise,
+        ]);
+
+        summary.innerHTML = studentSummary ? renderStudentResultsSummary(studentSummary) : '';
+
         const completedAttempts = attempts.filter(
             (attempt) => attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED',
         );
@@ -862,17 +1236,32 @@ async function loadResults() {
         list.innerHTML = completedAttempts
             .map(
                 (attempt, index) => `
-                    <div class="card card-interactive exam-card animate-in result-entry" data-attempt-id="${attempt.id}" style="cursor: pointer; animation-delay: ${index * 40}ms;">
+                    <div class="card card-interactive exam-card animate-in result-entry" data-attempt-id="${attempt.id}" style="cursor: pointer; animation-delay: ${index * 35}ms;">
                         <div class="exam-card-header">
                             <div>
-                                <h3>Attempt #${attempt.id}</h3>
-                                <p class="helper-text">Exam #${attempt.exam_id}</p>
+                                <h3>${
+                                    currentUser.role === 'student'
+                                        ? `Attempt #${attempt.id}`
+                                        : escapeHtml(
+                                              attempt.student?.name ||
+                                                  attempt.student?.email ||
+                                                  `Attempt #${attempt.id}`,
+                                          )
+                                }</h3>
+                                <p class="helper-text">
+                                    Exam #${attempt.exam_id}
+                                    ${
+                                        attempt.result
+                                            ? ` • Score ${attempt.result.total_score}/${attempt.result.max_score}`
+                                            : ''
+                                    }
+                                </p>
                             </div>
                             <span class="badge ${getStatusBadgeClass(attempt.status)}">${attempt.status}</span>
                         </div>
                         <div class="exam-card-meta">
-                            <span>${new Date(attempt.started_at).toLocaleDateString()}</span>
-                            <span>Open result details</span>
+                            <span>${new Date(attempt.started_at).toLocaleString()}</span>
+                            <span>Open analytics</span>
                         </div>
                     </div>
                 `,
@@ -887,18 +1276,448 @@ async function loadResults() {
             });
         });
     } catch (error: any) {
-        showToast(error.message, 'error');
+        if (!silent) {
+            showToast(error.message, 'error');
+        }
+        list.innerHTML = renderEmptyState(
+            '!',
+            'Results unavailable',
+            error.message || 'Please try again in a moment.',
+        );
     }
 }
 
-async function loadReports() {
+function formatPercent(value: number | null | undefined): string {
+    const safeValue = Number.isFinite(value) ? Number(value) : 0;
+    return `${safeValue.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function formatValue(value: number | null | undefined): string {
+    const safeValue = Number.isFinite(value) ? Number(value) : 0;
+    return safeValue.toFixed(1).replace(/\.0$/, '');
+}
+
+function renderBarRows(
+    items: Array<{ label: string; count: number }>,
+    tone: 'blue' | 'green' | 'amber' | 'rose' = 'blue',
+    emptyText = 'No data yet.',
+): string {
+    if (!items.length || items.every((item) => item.count === 0)) {
+        return `<p class="helper-text">${emptyText}</p>`;
+    }
+
+    const maxValue = Math.max(...items.map((item) => item.count), 1);
+
+    return `
+        <div class="report-bars">
+            ${items
+                .map(
+                    (item) => `
+                        <div class="report-bar-row">
+                            <div class="report-bar-head">
+                                <span>${escapeHtml(item.label)}</span>
+                                <span>${item.count}</span>
+                            </div>
+                            <div class="report-bar-track">
+                                <div class="report-bar-fill ${tone}" style="width: ${(item.count / maxValue) * 100}%"></div>
+                            </div>
+                        </div>
+                    `,
+                )
+                .join('')}
+        </div>
+    `;
+}
+
+function renderDonutCard(
+    label: string,
+    value: number | null | undefined,
+    note: string,
+    tone: 'blue' | 'green' | 'amber' | 'rose',
+): string {
+    const safeValue = Math.max(0, Math.min(100, Number.isFinite(value) ? Number(value) : 0));
+
+    return `
+        <div class="report-donut-card">
+            <div class="report-donut ${tone}" style="--value:${safeValue}">
+                <span>${formatPercent(safeValue)}</span>
+            </div>
+            <h4>${escapeHtml(label)}</h4>
+            <p>${escapeHtml(note)}</p>
+        </div>
+    `;
+}
+
+function renderTimelineChart(
+    timeline: Array<{ label: string; started: number; submitted: number; evaluated: number }>,
+): string {
+    if (!timeline.length) {
+        return '<p class="helper-text">No recent activity yet.</p>';
+    }
+
+    const maxValue = Math.max(
+        ...timeline.flatMap((item) => [item.started, item.submitted, item.evaluated]),
+        1,
+    );
+
+    return `
+        <div class="timeline-legend">
+            <span><i class="legend-dot blue"></i>Started</span>
+            <span><i class="legend-dot amber"></i>Submitted</span>
+            <span><i class="legend-dot green"></i>Evaluated</span>
+        </div>
+        <div class="timeline-grid">
+            ${timeline
+                .map(
+                    (item) => `
+                        <div class="timeline-day">
+                            <div class="timeline-day-bars">
+                                <span class="timeline-bar blue" style="height:${(item.started / maxValue) * 100}%"></span>
+                                <span class="timeline-bar amber" style="height:${(item.submitted / maxValue) * 100}%"></span>
+                                <span class="timeline-bar green" style="height:${(item.evaluated / maxValue) * 100}%"></span>
+                            </div>
+                            <span class="timeline-day-label">${escapeHtml(item.label)}</span>
+                        </div>
+                    `,
+                )
+                .join('')}
+        </div>
+    `;
+}
+
+function renderTopExamsTable(topExams: Array<any>): string {
+    if (!topExams.length) {
+        return '<p class="helper-text">No exam analytics available yet.</p>';
+    }
+
+    return `
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Exam</th>
+                    <th>Attempts</th>
+                    <th>Completion</th>
+                    <th>Avg Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${topExams
+                    .map(
+                        (exam) => `
+                            <tr>
+                                <td class="table-primary">${escapeHtml(exam.title)}</td>
+                                <td>${exam.attempt_count}</td>
+                                <td>${formatPercent(exam.completion_rate)}</td>
+                                <td>${formatPercent(exam.average_percentage)}</td>
+                            </tr>
+                        `,
+                    )
+                    .join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderQuestionInsights(questionInsights: Array<any>): string {
+    if (!questionInsights.length) {
+        return '<p class="helper-text">Question-level analytics will appear after candidates start submitting.</p>';
+    }
+
+    return `
+        <div class="insight-list">
+            ${questionInsights
+                .slice(0, 4)
+                .map(
+                    (item) => `
+                        <div class="insight-item">
+                            <div class="insight-item-head">
+                                <span class="badge ${item.type === 'MCQ' ? 'badge-primary' : 'badge-purple'}">${item.type}</span>
+                                <span class="chip">${escapeHtml(item.difficulty)}</span>
+                            </div>
+                            <p class="text-sm">${escapeHtml(item.prompt)}</p>
+                            <div class="insight-item-meta">
+                                <span>Response ${formatPercent(item.response_rate)}</span>
+                                ${
+                                    item.type === 'MCQ'
+                                        ? `<span>Correct ${formatPercent(item.correct_rate)}</span>`
+                                        : `<span>Avg marks ${formatValue(item.average_awarded_marks)}/${formatValue(item.marks)}</span>`
+                                }
+                                <span>Blank ${item.blank_count}</span>
+                            </div>
+                        </div>
+                    `,
+                )
+                .join('')}
+        </div>
+    `;
+}
+
+function renderLeaderboardTable(rows: Array<any>): string {
+    if (!rows.length) {
+        return '<p class="helper-text">Leaderboard data appears after attempts are submitted.</p>';
+    }
+
+    return `
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Status</th>
+                    <th>Score</th>
+                    <th>Flags</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows
+                    .map(
+                        (row) => `
+                            <tr>
+                                <td class="table-primary">${escapeHtml(row.student_name)}</td>
+                                <td><span class="badge ${getStatusBadgeClass(row.status)}">${escapeHtml(row.status)}</span></td>
+                                <td>${row.percentage !== null ? formatPercent(row.percentage) : '—'}</td>
+                                <td>${row.violations}</td>
+                            </tr>
+                        `,
+                    )
+                    .join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function renderProgressFunnel(stages: Array<{ label: string; count: number }>): string {
+    return renderBarRows(stages, 'blue', 'No delivery funnel data yet.');
+}
+
+function renderReportsOverview(dashboard: any): string {
+    const overview = dashboard.overview || dashboard;
+
+    return `
+        <section class="card report-hero animate-in">
+            <div class="report-panel-header">
+                <div>
+                    <span class="section-title">Advanced Analytics</span>
+                    <h3 class="panel-title">Operational view across exams, participation, and integrity</h3>
+                </div>
+                <p class="report-panel-copy">
+                    Live activity, score quality, review backlog, and risk signals are summarized here so exam operations are easier to act on.
+                </p>
+            </div>
+
+            <div class="report-kpi-grid">
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Average Score</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.average_percentage)}</strong>
+                    <span class="report-kpi-note">${overview.evaluated_attempts} evaluated attempts</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Participation</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.participation_rate)}</strong>
+                    <span class="report-kpi-note">${overview.total_attempts} attempts across assignments</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Integrity Alerts</span>
+                    <strong class="report-kpi-value">${overview.integrity_alerts}</strong>
+                    <span class="report-kpi-note">${overview.high_risk_attempts} high-risk attempts</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Pending Review</span>
+                    <strong class="report-kpi-value">${overview.pending_evaluation}</strong>
+                    <span class="report-kpi-note">${overview.active_attempts} currently in progress</span>
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function renderDashboardPanels(dashboard: any): string {
+    const overview = dashboard.overview || dashboard;
+
+    return `
+        <section class="report-grid">
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Delivery Health</h4>
+                        <p class="report-panel-copy">Participation, quality, and active exam mix.</p>
+                    </div>
+                </div>
+                <div class="report-visual-grid">
+                    ${renderDonutCard('Participation rate', overview.participation_rate, `${overview.total_attempts} total attempts`, 'blue')}
+                    ${renderDonutCard('Average score', overview.average_percentage, `${overview.evaluated_attempts} evaluated`, 'green')}
+                    ${renderDonutCard('High-risk share', overview.total_attempts ? (overview.high_risk_attempts / overview.total_attempts) * 100 : 0, `${overview.high_risk_attempts} flagged attempts`, 'rose')}
+                </div>
+            </article>
+
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Exam Status Mix</h4>
+                        <p class="report-panel-copy">How the current exam portfolio is distributed.</p>
+                    </div>
+                </div>
+                ${renderBarRows(dashboard.exam_status_breakdown || [], 'amber', 'No exam status data yet.')}
+            </article>
+
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Attempt Flow</h4>
+                        <p class="report-panel-copy">Current candidate progress through the lifecycle.</p>
+                    </div>
+                </div>
+                ${renderBarRows(dashboard.attempt_status_breakdown || [], 'green', 'No attempt data yet.')}
+            </article>
+
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Recent Activity</h4>
+                        <p class="report-panel-copy">Started, submitted, and evaluated attempts over the last 7 days.</p>
+                    </div>
+                </div>
+                ${renderTimelineChart(dashboard.activity_timeline || [])}
+            </article>
+
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Integrity Signals</h4>
+                        <p class="report-panel-copy">Violation type volume and risk concentration.</p>
+                    </div>
+                </div>
+                <div class="report-split-grid">
+                    <div>
+                        <span class="section-title">Violation Types</span>
+                        ${renderBarRows(dashboard.integrity_breakdown || [], 'rose', 'No integrity events recorded.')}
+                    </div>
+                    <div>
+                        <span class="section-title">Risk Bands</span>
+                        ${renderBarRows(dashboard.risk_distribution || [], 'amber', 'No risk distribution yet.')}
+                    </div>
+                </div>
+            </article>
+
+            <article class="card report-panel">
+                <div class="report-panel-header">
+                    <div>
+                        <h4 class="report-panel-title">Top Exam Activity</h4>
+                        <p class="report-panel-copy">Highest-volume exams ranked by usage and completion.</p>
+                    </div>
+                </div>
+                ${renderTopExamsTable(dashboard.top_exams || [])}
+            </article>
+        </section>
+    `;
+}
+
+function renderExamReport(report: any, index: number): string {
+    const overview = report.overview || {};
+    const exam = report.exam || {};
+
+    return `
+        <article class="card report-exam-card animate-in" style="animation-delay:${index * 45}ms;">
+            <div class="report-panel-header">
+                <div>
+                    <span class="section-title">Exam Analytics</span>
+                    <h3 class="card-title">${escapeHtml(exam.title || 'Exam')}</h3>
+                    <p class="report-panel-copy">
+                        ${exam.question_count || 0} questions • ${exam.duration_minutes || 0} minutes • ${exam.assigned_students || 0} assigned students • ${exam.teacher_count || 0} teachers
+                    </p>
+                </div>
+                <div class="flex items-center gap-sm">
+                    <span class="badge ${getStatusBadgeClass(exam.status || 'DRAFT')}">${escapeHtml(exam.status || 'DRAFT')}</span>
+                    <span class="chip">${exam.start_time ? new Date(exam.start_time).toLocaleString() : 'No start time'}</span>
+                </div>
+            </div>
+
+            <div class="report-kpi-grid compact">
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Participation</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.participation_rate)}</strong>
+                    <span class="report-kpi-note">${overview.attempt_count || 0} started</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Completion</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.completion_rate)}</strong>
+                    <span class="report-kpi-note">${overview.submitted_count || 0} submitted</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Average Score</span>
+                    <strong class="report-kpi-value">${formatPercent(overview.average_percentage)}</strong>
+                    <span class="report-kpi-note">Median ${formatPercent(overview.median_percentage)}</span>
+                </div>
+                <div class="report-kpi-card">
+                    <span class="report-kpi-label">Integrity Alerts</span>
+                    <strong class="report-kpi-value">${overview.total_violations || 0}</strong>
+                    <span class="report-kpi-note">${overview.high_risk_attempts || 0} high-risk attempts</span>
+                </div>
+            </div>
+
+            <div class="report-detail-grid">
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Progress Funnel</h4>
+                        <p class="report-panel-copy">Assigned to evaluated candidate flow.</p>
+                    </div>
+                    ${renderProgressFunnel(report.progress_funnel || [])}
+                </section>
+
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Score Distribution</h4>
+                        <p class="report-panel-copy">Percentage score bands for evaluated attempts.</p>
+                    </div>
+                    ${renderBarRows(report.score_distribution || [], 'green', 'No evaluated scores yet.')}
+                </section>
+
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Question Insights</h4>
+                        <p class="report-panel-copy">Hardest or lowest-response questions first.</p>
+                    </div>
+                    ${renderQuestionInsights(report.question_insights || [])}
+                </section>
+
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Leaderboard</h4>
+                        <p class="report-panel-copy">Top evaluated candidates with flag counts.</p>
+                    </div>
+                    ${renderLeaderboardTable(report.leaderboard || [])}
+                </section>
+
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Integrity Breakdown</h4>
+                        <p class="report-panel-copy">What kind of proctoring events were recorded.</p>
+                    </div>
+                    ${renderBarRows(report.proctoring_breakdown || [], 'rose', 'No proctoring events recorded.')}
+                </section>
+
+                <section class="report-subpanel">
+                    <div class="report-subpanel-header">
+                        <h4 class="report-panel-title">Risk Distribution</h4>
+                        <p class="report-panel-copy">Clean, flagged, and high-risk attempt mix.</p>
+                    </div>
+                    ${renderBarRows(report.risk_distribution || [], 'amber', 'No risk signals yet.')}
+                </section>
+            </div>
+        </article>
+    `;
+}
+
+async function loadReports(silent = false) {
     const content = document.getElementById('reports-content');
     if (!content) return;
 
     try {
-        const exams = await apiFetch<any[]>('/exams/');
+        const [dashboard, exams] = await Promise.all([
+            apiFetch<any>('/reports/dashboard'),
+            apiFetch<any[]>('/exams/'),
+        ]);
 
-        if (!exams.length) {
+        if (!exams.length && !(dashboard.top_exams || []).length) {
             content.innerHTML = renderEmptyState(
                 'RP',
                 'No report data',
@@ -907,63 +1726,50 @@ async function loadReports() {
             return;
         }
 
-        const summaries = await Promise.all(
+        const analyticsResults = await Promise.all(
             exams.map(async (exam) => {
                 try {
-                    const report = await apiFetch<any>(`/reports/exam/${exam.id}/summary`);
-                    return { exam, report };
+                    return await apiFetch<any>(`/reports/exam/${exam.id}/analytics`);
                 } catch {
                     return null;
                 }
             }),
         );
 
-        const validSummaries = summaries.filter(Boolean) as Array<{ exam: any; report: any }>;
+        const reports = analyticsResults.filter(Boolean) as any[];
+        reports.sort((left, right) => {
+            const leftAttempts = left?.overview?.attempt_count || 0;
+            const rightAttempts = right?.overview?.attempt_count || 0;
+            if (leftAttempts !== rightAttempts) return rightAttempts - leftAttempts;
+            return String(left?.exam?.title || '').localeCompare(String(right?.exam?.title || ''));
+        });
 
-        if (!validSummaries.length) {
-            content.innerHTML = renderEmptyState(
-                'RP',
-                'Reports unavailable',
-                'Summary data could not be loaded right now.',
-            );
-            return;
-        }
-
-        content.innerHTML = validSummaries
-            .map(
-                ({ exam, report }) => `
-                    <div class="card view-panel animate-in">
-                        <div class="main-header">
-                            <div class="flex flex-col gap-xs">
-                                <span class="section-title">Summary</span>
-                                <h3 class="card-title">${escapeHtml(exam.title)}</h3>
-                            </div>
-                            <span class="badge ${getStatusBadgeClass(exam.status)}">${exam.status}</span>
-                        </div>
-                        <div class="stats-grid">
-                            <div class="stat-card blue">
-                                <div class="stat-card-value">${report.total_attempts}</div>
-                                <div class="stat-card-label">Attempts</div>
-                            </div>
-                            <div class="stat-card green">
-                                <div class="stat-card-value">${report.average_score}</div>
-                                <div class="stat-card-label">Average Score</div>
-                            </div>
-                            <div class="stat-card amber">
-                                <div class="stat-card-value">${report.total_submitted}</div>
-                                <div class="stat-card-label">Submitted</div>
-                            </div>
-                            <div class="stat-card rose">
-                                <div class="stat-card-value">${report.total_proctoring_violations}</div>
-                                <div class="stat-card-label">Violations</div>
-                            </div>
-                        </div>
-                    </div>
-                `,
-            )
-            .join('');
+        content.innerHTML = `
+            <div class="reports-shell">
+                ${renderReportsOverview(dashboard)}
+                ${renderDashboardPanels(dashboard)}
+                <section class="stack-list">
+                    ${
+                        reports.length
+                            ? reports.map((report, index) => renderExamReport(report, index)).join('')
+                            : renderEmptyState(
+                                  'RP',
+                                  'Per-exam analytics unavailable',
+                                  'The dashboard summary loaded, but detailed exam analytics could not be generated right now.',
+                              )
+                    }
+                </section>
+            </div>
+        `;
     } catch (error: any) {
-        showToast(error.message, 'error');
+        if (!silent) {
+            showToast(error.message, 'error');
+        }
+        content.innerHTML = renderEmptyState(
+            '!',
+            'Reports unavailable',
+            error.message || 'Please try again in a moment.',
+        );
     }
 }
 

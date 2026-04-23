@@ -41,9 +41,9 @@ graph TD
     feature-api-router["🌐 API v1 Router<br/>/api/v1"]
     feature-auth-api["🔑 Auth API<br/>/auth/login"]
     feature-users-api["👥 Users API<br/>/users"]
-    feature-exams-api["📝 Exams API<br/>/exams + /questions"]
-    feature-attempts-api["🎯 Attempts API<br/>/attempts"]
-    feature-reports-api["📊 Reports API<br/>/reports"]
+    feature-exams-api["📝 Exams API<br/>/exams + /questions + /folders"]
+    feature-attempts-api["🎯 Attempts API<br/>/attempts + live-safe saves"]
+    feature-reports-api["📊 Reports API<br/>/reports + attempt analytics"]
 
     service-entrypoint -->|uses| feature-api-router
     feature-api-router -->|contains| feature-auth-api
@@ -63,9 +63,9 @@ graph TD
     %% ============================================
     model-user["👤 User Model<br/>users table"]
     model-exam["📋 Exam Model<br/>exams table"]
-    model-question["❓ Question Model<br/>questions table"]
+    model-question["❓ Question Model<br/>questions + folder sharing"]
     model-exam-question["🔗 ExamQuestion<br/>exam_questions table"]
-    model-assignment["📌 Assignment<br/>assignments table"]
+    model-assignment["📌 Assignment<br/>student + teacher assignment"]
     model-attempt["🎯 Attempt Model<br/>attempts table"]
     model-response["✍️ Response Model<br/>responses table"]
     model-proctoring-log["👁️ ProctoringLog<br/>proctoring_logs table"]
@@ -101,7 +101,11 @@ graph TD
     feature-attempts-api -->|writes_to| model-response
     feature-attempts-api -->|writes_to| model-proctoring-log
     feature-attempts-api -->|writes_to| model-result
+    feature-reports-api -->|reads_from| model-exam
+    feature-reports-api -->|reads_from| model-assignment
     feature-reports-api -->|reads_from| model-attempt
+    feature-reports-api -->|reads_from| model-response
+    feature-reports-api -->|reads_from| model-proctoring-log
     feature-reports-api -->|reads_from| model-result
 
     %% ============================================
@@ -134,9 +138,9 @@ graph TD
     %% FRONTEND SCREENS
     %% ============================================
     screen-login["🔐 Login Screen<br/>index.html"]
-    screen-dashboard["📊 Dashboard Screen<br/>dashboard.html"]
-    screen-exam["📝 Exam Screen<br/>exam.html"]
-    screen-result["🏆 Result Screen<br/>result.html"]
+    screen-dashboard["📊 Dashboard Screen<br/>live collaboration workspace"]
+    screen-exam["📝 Exam Screen<br/>live question sync"]
+    screen-result["🏆 Result Screen<br/>attempt analytics"]
 
     module-frontend -->|contains| screen-login
     module-frontend -->|contains| screen-dashboard
@@ -152,6 +156,7 @@ graph TD
     screen-login -->|depends_on| feature-auth-api
     screen-dashboard -->|depends_on| feature-users-api
     screen-dashboard -->|depends_on| feature-exams-api
+    screen-dashboard -->|depends_on| feature-reports-api
     screen-exam -->|depends_on| feature-attempts-api
     screen-exam -->|depends_on| feature-exams-api
     screen-result -->|depends_on| feature-attempts-api
@@ -180,7 +185,7 @@ graph TD
     %% CROSS-CUTTING FLOWS
     %% ============================================
     flow-auth["🔄 Auth Flow<br/>Login → JWT → Guards"]
-    flow-exam-lifecycle["🔄 Exam Lifecycle<br/>Create → Attempt → Evaluate"]
+    flow-exam-lifecycle["🔄 Exam Lifecycle<br/>Create → Assign → Live Sync → Evaluate"]
     flow-proctoring["🔄 Proctoring Flow<br/>Monitor → Log → Store"]
 
     project-root -->|contains| flow-auth

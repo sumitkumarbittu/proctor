@@ -93,7 +93,7 @@
     "title": "Question Model",
     "type": "model",
     "files": ["backend/app/models/exam.py"],
-    "tags": ["model", "question"]
+    "tags": ["model", "question", "folders", "sharing"]
   },
   "model-exam-question": {
     "title": "ExamQuestion Association",
@@ -105,7 +105,7 @@
     "title": "Assignment Model",
     "type": "model",
     "files": ["backend/app/models/exam.py"],
-    "tags": ["model", "assignment"]
+    "tags": ["model", "assignment", "teacher", "student", "collaboration"]
   },
   "model-attempt": {
     "title": "Attempt Model",
@@ -153,19 +153,19 @@
     "title": "Exams API",
     "type": "feature",
     "files": ["backend/app/api/v1/exams.py"],
-    "tags": ["api", "exams", "questions", "crud"]
+    "tags": ["api", "exams", "questions", "folders", "crud", "assignments", "access-control", "collaboration"]
   },
   "feature-attempts-api": {
     "title": "Attempts API",
     "type": "feature",
     "files": ["backend/app/api/v1/attempts.py"],
-    "tags": ["api", "attempts", "proctoring", "evaluation"]
+    "tags": ["api", "attempts", "proctoring", "evaluation", "autosave", "exam-access", "live-sync"]
   },
   "feature-reports-api": {
     "title": "Reports API",
     "type": "feature",
     "files": ["backend/app/api/v1/reports.py"],
-    "tags": ["api", "reports", "analytics"]
+    "tags": ["api", "reports", "analytics", "dashboard", "visualization", "student-report"]
   },
   "feature-schemas": {
     "title": "Pydantic Schemas",
@@ -177,7 +177,7 @@
     "title": "Test Suite",
     "type": "feature",
     "files": ["backend/tests/conftest.py", "backend/tests/test_api.py"],
-    "tags": ["testing", "pytest"]
+    "tags": ["testing", "pytest", "pytest-asyncio", "smoke"]
   },
   "screen-login": {
     "title": "Login Screen",
@@ -189,43 +189,43 @@
     "title": "Dashboard Screen",
     "type": "screen",
     "files": ["frontend/dashboard.html", "frontend/src/scripts/dashboard.ts"],
-    "tags": ["ui", "dashboard", "exams"]
+    "tags": ["ui", "dashboard", "exams", "reports", "analytics", "realtime", "collaboration"]
   },
   "screen-exam": {
     "title": "Exam Screen",
     "type": "screen",
     "files": ["frontend/exam.html", "frontend/src/scripts/exam.ts"],
-    "tags": ["ui", "exam", "timer", "proctoring"]
+    "tags": ["ui", "exam", "timer", "proctoring", "autosave", "resume", "live-sync"]
   },
   "screen-result": {
     "title": "Result Screen",
     "type": "screen",
     "files": ["frontend/result.html", "frontend/src/scripts/result.ts"],
-    "tags": ["ui", "results"]
+    "tags": ["ui", "results", "analytics", "student-report"]
   },
   "component-api-client": {
     "title": "API Client (apiFetch)",
     "type": "component",
     "files": ["frontend/src/scripts/api.ts"],
-    "tags": ["api", "http", "fetch"]
+    "tags": ["api", "http", "fetch", "error-handling", "auth"]
   },
   "component-proctor": {
     "title": "Proctor Class",
     "type": "component",
     "files": ["frontend/src/scripts/proctor.ts"],
-    "tags": ["proctoring", "security", "events"]
+    "tags": ["proctoring", "security", "events", "cleanup"]
   },
   "component-utils": {
     "title": "Frontend Utilities",
     "type": "utility",
     "files": ["frontend/src/scripts/utils.ts"],
-    "tags": ["utility", "helpers"]
+    "tags": ["utility", "helpers", "toast", "formatting"]
   },
   "component-css-design": {
     "title": "CSS Design System",
     "type": "theme",
     "files": ["frontend/src/styles/main.css", "frontend/src/styles/base.css", "frontend/src/styles/layout.css", "frontend/src/styles/components.css"],
-    "tags": ["css", "design", "theme"]
+    "tags": ["css", "design", "theme", "responsive", "analytics-ui"]
   },
   "config-nginx": {
     "title": "Nginx Reverse Proxy",
@@ -243,13 +243,13 @@
     "title": "Exam Lifecycle Flow",
     "type": "flow",
     "files": [],
-    "tags": ["flow", "exam", "lifecycle"]
+    "tags": ["flow", "exam", "lifecycle", "assignments", "analytics", "collaboration", "live-sync"]
   },
   "flow-proctoring": {
     "title": "Proctoring Flow",
     "type": "flow",
     "files": [],
-    "tags": ["flow", "proctoring", "security"]
+    "tags": ["flow", "proctoring", "security", "analytics"]
   },
   "placeholder-services": {
     "title": "Services Layer (Empty)",
