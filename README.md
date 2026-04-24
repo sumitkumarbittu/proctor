@@ -77,18 +77,20 @@ A comprehensive, production-ready online examination platform with built-in proc
 2. **Build and start services:**
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 This will:
 - Spin up PostgreSQL database.
 - Build the Backend image.
 - Build the Frontend image (compiling TypeScript).
+- Wait for the database and backend health checks before exposing dependent services.
 - Run database migrations automatically.
 - Create a default Superuser.
 
 3. **Access the Application:**
    - Frontend: `http://localhost`
    - API Docs: `http://localhost:8000/docs`
+   - Health Check: `http://localhost:8000/health`
 
 ### Default Credentials
 A superuser is created automatically on first run:
@@ -108,6 +110,7 @@ A superuser is created automatically on first run:
 
 ## Assumptions & Notes
 - **Security:** In a real production environment, secrets (SECRET_KEY, POSTGRES_PASSWORD) should be injected via robust secret management, not `.env` files committed to repo.
+- **Docker Env Loading:** Docker Compose reads both `.env.example` and `.env` for app settings, but the Dockerized local stack intentionally clears `DATABASE_URL` so the backend always uses the local `db` service instead of an external database URL from your shell or `.env`.
 - **Proctoring:** Basic browser events (visibilitychange, blur) are used. Advanced proctoring would require WebRTC/Camera permissions.
 - **Evaluation:** Currently, MCQs are auto-graded upon submission/evaluation trigger. Subjective answers require manual review (endpoint provided).
 - **Time Sync:** Exam timer runs client-side synchronized with server start time. For strict enforcement, server-side validation on submission is critical (partially implemented).

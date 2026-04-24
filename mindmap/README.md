@@ -2,7 +2,7 @@
 
 This folder contains a structured, visualization-friendly architecture map of the **Online Examination and Proctoring System (OEPS)**.
 
-Latest synced change: `chg-006` — question-bank folder open flow, exam question assignment refresh, async serializer hardening, and dashboard SF Symbol icon mapping.
+Latest synced change: `chg-007` — exam scheduling ownership, password-gated start/resume, server-authoritative attempt timing, and non-terminating proctor flag flow.
 
 ## File Reference
 

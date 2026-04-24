@@ -131,7 +131,7 @@ class ExamBase(BaseModel):
 
 
 class ExamCreate(ExamBase):
-    pass
+    password: str
 
 
 class ExamUpdate(BaseModel):
@@ -140,6 +140,7 @@ class ExamUpdate(BaseModel):
     duration_minutes: Optional[int] = None
     start_time: Optional[datetime] = None
     status: Optional[ExamStatus] = None
+    password: Optional[str] = None
 
 
 class Exam(BaseModel):
@@ -149,6 +150,13 @@ class Exam(BaseModel):
     duration_minutes: int
     start_time: Optional[datetime] = None
     status: ExamStatus
+    requires_password: bool = False
+    can_manage_schedule: bool = False
+    can_manage_timer: bool = False
+    can_manage_password: bool = False
+    question_count: int = 0
+    schedule_updated_at: Optional[datetime] = None
+    schedule_updated_by: Optional[int] = None
     created_by: int
     created_at: datetime
     creator: Optional[UserPreview] = None

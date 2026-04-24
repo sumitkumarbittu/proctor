@@ -1,4 +1,12 @@
-export const API_BASE_URL = '/api/v1';
+const configuredApiBaseUrl =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api/v1';
+
+export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, '');
+
+export function buildApiUrl(endpoint: string): string {
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${API_BASE_URL}${normalizedEndpoint}`;
+}
 
 export function getAuthToken(): string | null {
     return localStorage.getItem('token');

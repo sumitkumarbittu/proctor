@@ -1,7 +1,23 @@
-from typing import List, Optional, Union
-from pydantic_settings import BaseSettings
+from pathlib import Path
+from typing import List, Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parents[2]
+_REPO_DIR = _BACKEND_DIR.parent if _BACKEND_DIR.name == "backend" else _BACKEND_DIR
+_ENV_FILES = (
+    _REPO_DIR / ".env.example",
+    _BACKEND_DIR / ".env.example",
+    _REPO_DIR / ".env",
+    _BACKEND_DIR / ".env",
+)
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=tuple(str(path) for path in _ENV_FILES),
+    )
+
     PROJECT_NAME: str = "Online Examination and Proctoring System"
     API_V1_STR: str = "/api/v1"
     
@@ -25,6 +41,8 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         if self.DATABASE_URL:
             url = self.DATABASE_URL.strip()
+            if len(url) >= 2 and url[0] == url[-1] and url[0] in {"'", '"'}:
+                url = url[1:-1]
             # asyncpg requires the 'postgresql+asyncpg://' scheme
             if url.startswith("postgres://"):
                 url = url.replace("postgres://", "postgresql+asyncpg://", 1)
@@ -33,9 +51,5 @@ class Settings(BaseSettings):
             return url
         
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
 
 settings = Settings()

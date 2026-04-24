@@ -17,6 +17,8 @@ class Attempt(Base):
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(Enum(AttemptStatus), default=AttemptStatus.IN_PROGRESS)
     started_at = Column(DateTime, default=func.now())
+    ends_at = Column(DateTime, nullable=True)
+    last_opened_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
 
     exam = relationship("Exam", back_populates="attempts")

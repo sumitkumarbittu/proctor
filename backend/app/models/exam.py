@@ -28,10 +28,13 @@ class Exam(Base):
     status = Column(Enum(ExamStatus), default=ExamStatus.DRAFT)
     start_time = Column(DateTime, nullable=True)
     duration_minutes = Column(Integer, nullable=False)
+    password_hash = Column(String, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"))
+    schedule_updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    schedule_updated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    creator = relationship("User", back_populates="exams_created")
+    creator = relationship("User", back_populates="exams_created", foreign_keys=[created_by])
     questions = relationship("ExamQuestion", back_populates="exam", cascade="all, delete-orphan")
     assignments = relationship("Assignment", back_populates="exam", cascade="all, delete-orphan")
     teacher_assignments = relationship(

@@ -21,7 +21,7 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
 
     # Relationships
-    exams_created = relationship("Exam", back_populates="creator")
+    exams_created = relationship("Exam", back_populates="creator", foreign_keys="Exam.created_by")
     assignments = relationship("Assignment", back_populates="student")
     teacher_exam_assignments = relationship("TeacherAssignment", back_populates="teacher")
     attempts = relationship("Attempt", back_populates="student")

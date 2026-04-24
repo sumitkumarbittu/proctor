@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Wait for database
 echo "Waiting for postgres..."
 while ! nc -z db 5432; do
@@ -7,7 +9,7 @@ while ! nc -z db 5432; do
 done
 echo "PostgreSQL started"
 
-export PYTHONPATH=$PYTHONPATH:/app
+export PYTHONPATH="${PYTHONPATH:-}:/app"
 
 # Check if migrations exist (this check is naive as migrations/versions implies committed migrations)
 # In dev/demo environment we might want to ensure tables exist even if user didn't mount volume correctly.
@@ -20,7 +22,22 @@ fi
 
 # Run migrations
 echo "Running migrations..."
-alembic upgrade head
+set +e
+MIGRATION_OUTPUT=$(alembic upgrade head 2>&1)
+MIGRATION_STATUS=$?
+set -e
+printf '%s\n' "$MIGRATION_OUTPUT"
+
+if [ "$MIGRATION_STATUS" -ne 0 ]; then
+  if printf '%s' "$MIGRATION_OUTPUT" | grep -q "Can't locate revision identified by"; then
+    echo "Recovering from stale Alembic revision state..."
+    python scripts/recover_alembic_state.py
+    alembic upgrade head
+  else
+    echo "Migration failed; backend startup aborted."
+    exit "$MIGRATION_STATUS"
+  fi
+fi
 
 # Create initial data
 echo "Creating initial data..."
@@ -28,4 +45,4 @@ python app/create_superuser.py
 
 # Start server
 echo "Starting backend..."
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -1,4 +1,4 @@
-import { setAuthToken } from './utils';
+import { buildApiUrl, setAuthToken } from './utils';
 
 const loginForm = document.getElementById('loginForm') as HTMLFormElement | null;
 const errorMessage = document.getElementById('error-message');
@@ -27,7 +27,7 @@ if (loginForm) {
             formData.append('username', email);
             formData.append('password', password);
 
-            const response = await fetch('/api/v1/auth/login', {
+            const response = await fetch(buildApiUrl('/auth/login'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',

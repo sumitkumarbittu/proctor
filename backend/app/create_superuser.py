@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from app.db.session import AsyncSessionLocal
+from app.db.session import get_engine, get_session_factory
 from app.db import base  # Ensure all models are registered
 from app.models.user import User, UserRole
 from app.core import security
@@ -10,7 +10,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def init_db() -> None:
-    async with AsyncSessionLocal() as db:
+    get_engine()
+    session_factory = get_session_factory()
+
+    async with session_factory() as db:
         result = await db.execute(select(User).filter(User.email == "admin@example.com"))
         user = result.scalars().first()
         if not user:
@@ -29,8 +32,7 @@ async def init_db() -> None:
 
 def main() -> None:
     logger.info("Creating initial data")
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(init_db())
+    asyncio.run(init_db())
     logger.info("Initial data created")
 
 if __name__ == "__main__":

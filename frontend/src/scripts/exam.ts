@@ -4,6 +4,7 @@ import { debounce, escapeHtml, formatTime, showToast } from './utils';
 
 const urlParams = new URLSearchParams(window.location.search);
 const attemptId = urlParams.get('attempt_id');
+const examAccessStorageKey = attemptId ? `oeps-exam-access:${attemptId}` : null;
 
 let timerInterval: number | null = null;
 let syncInterval: number | null = null;
@@ -15,8 +16,32 @@ let isSubmitting = false;
 let lastExamSignature = '';
 const answeredQuestions = new Set<number>();
 let proctor: Proctor | null = null;
+let serverTimeOffsetMs = 0;
+let attemptEndsAtMs: number | null = null;
 
 const LIVE_SYNC_INTERVAL_MS = 6000;
+
+function getExamAccessToken() {
+    return examAccessStorageKey ? sessionStorage.getItem(examAccessStorageKey) : null;
+}
+
+function clearExamAccessToken() {
+    if (examAccessStorageKey) {
+        sessionStorage.removeItem(examAccessStorageKey);
+    }
+}
+
+async function examApiFetch<T = unknown>(endpoint: string, options: RequestInit = {}) {
+    const headers = new Headers(options.headers);
+    const accessToken = getExamAccessToken();
+    if (accessToken) {
+        headers.set('X-Exam-Access-Token', accessToken);
+    }
+    return apiFetch<T>(endpoint, {
+        ...options,
+        headers,
+    });
+}
 
 function redirectToDashboard(delay = 0) {
     window.setTimeout(() => {
@@ -55,6 +80,26 @@ function setSaveState(state: 'ready' | 'saving' | 'error', message?: string) {
 
     saveStatus.textContent = message || 'All changes saved';
     connectionStatus.textContent = 'Connected';
+}
+
+function getAuthoritativeNow() {
+    return Date.now() + serverTimeOffsetMs;
+}
+
+function syncAttemptTiming(attempt: any) {
+    if (attempt?.server_time) {
+        const serverTimeMs = new Date(attempt.server_time).getTime();
+        if (!Number.isNaN(serverTimeMs)) {
+            serverTimeOffsetMs = serverTimeMs - Date.now();
+        }
+    }
+
+    if (attempt?.ends_at) {
+        const endsAtMs = new Date(attempt.ends_at).getTime();
+        attemptEndsAtMs = Number.isNaN(endsAtMs) ? null : endsAtMs;
+    } else {
+        attemptEndsAtMs = null;
+    }
 }
 
 function getExamSignature(exam: any) {
@@ -283,7 +328,7 @@ async function handleAnswerChange(questionId: number, answer: string) {
     setSaveState('saving');
 
     try {
-        await apiFetch(`/attempts/${attemptId}/response`, {
+        await examApiFetch(`/attempts/${attemptId}/response`, {
             method: 'POST',
             body: JSON.stringify({
                 question_id: questionId,
@@ -352,11 +397,12 @@ async function syncExamState() {
 
     try {
         const [latestAttempt, latestExam] = await Promise.all([
-            apiFetch<any>(`/attempts/${attemptId}`),
-            apiFetch<any>(`/exams/${currentAttempt.exam_id}`),
+            examApiFetch<any>(`/attempts/${attemptId}`),
+            examApiFetch<any>(`/exams/${currentAttempt.exam_id}`),
         ]);
 
         if (latestAttempt.status !== 'IN_PROGRESS') {
+            clearExamAccessToken();
             window.location.href = `/result.html?attempt_id=${attemptId}`;
             return;
         }
@@ -365,7 +411,7 @@ async function syncExamState() {
         if (latestSignature !== lastExamSignature) {
             const focusState = captureFocusState();
             const draftResponses = collectResponseSnapshot();
-            const savedResponses = await apiFetch<any[]>(`/attempts/${attemptId}/responses`).catch(() => []);
+            const savedResponses = await examApiFetch<any[]>(`/attempts/${attemptId}/responses`).catch(() => []);
             const responseMap = buildResponseMap(savedResponses, draftResponses);
 
             examData = latestExam;
@@ -380,6 +426,7 @@ async function syncExamState() {
         }
 
         currentAttempt = latestAttempt;
+        syncAttemptTiming(latestAttempt);
     } catch {
         setLiveUpdateStatus('Live sync is temporarily unavailable. Your current answers remain on screen.');
     }
@@ -409,15 +456,19 @@ function clearTimer() {
     }
 }
 
-function startTimer(startedAt: string, durationMinutes: number) {
+function startTimer() {
     const timer = document.getElementById('timer');
     if (!timer) return;
 
-    const startedAtTime = new Date(startedAt).getTime();
-    const endTime = startedAtTime + durationMinutes * 60 * 1000;
+    clearTimer();
+    if (!attemptEndsAtMs) {
+        timer.textContent = '--:--';
+        return;
+    }
+    const endsAtMs = attemptEndsAtMs;
 
     const renderRemainingTime = () => {
-        const remainingSeconds = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+        const remainingSeconds = Math.max(0, Math.floor((endsAtMs - getAuthoritativeNow()) / 1000));
 
         timer.textContent = formatTime(remainingSeconds);
         timer.classList.remove('warning', 'danger');
@@ -445,24 +496,35 @@ async function initExam() {
         return;
     }
 
+    if (!getExamAccessToken()) {
+        showToast('Open the exam from the dashboard and enter the password to continue.', 'warning');
+        redirectToDashboard(1200);
+        return;
+    }
+
     try {
-        currentAttempt = await apiFetch<any>(`/attempts/${attemptId}`);
-        examData = await apiFetch<any>(`/exams/${currentAttempt.exam_id}`);
+        currentAttempt = await examApiFetch<any>(`/attempts/${attemptId}`);
+        examData = await examApiFetch<any>(`/exams/${currentAttempt.exam_id}`);
 
         if (currentAttempt.status !== 'IN_PROGRESS') {
+            clearExamAccessToken();
             window.location.href = `/result.html?attempt_id=${attemptId}`;
             return;
         }
 
-        const responses = await apiFetch<any[]>(`/attempts/${attemptId}/responses`).catch(() => []);
+        const responses = await examApiFetch<any[]>(`/attempts/${attemptId}/responses`).catch(() => []);
         lastExamSignature = getExamSignature(examData);
         renderExam(examData, buildResponseMap(responses));
-        startTimer(currentAttempt.started_at, examData.duration_minutes);
+        syncAttemptTiming(currentAttempt);
+        startTimer();
         startLiveSync();
         setLiveUpdateStatus('Question changes sync automatically during the attempt.');
-        proctor = new Proctor(Number.parseInt(attemptId, 10));
+        proctor = new Proctor(Number.parseInt(attemptId, 10), getExamAccessToken() || '');
         setSaveState('ready');
     } catch (error: any) {
+        if (error?.message?.includes?.('Exam access')) {
+            clearExamAccessToken();
+        }
         showToast(error.message || 'Failed to load exam.', 'error');
         redirectToDashboard(1500);
     }
@@ -503,7 +565,8 @@ async function submitExam(auto = false) {
     }
 
     try {
-        await apiFetch(`/attempts/${attemptId}/submit`, { method: 'POST' });
+        await examApiFetch(`/attempts/${attemptId}/submit`, { method: 'POST' });
+        clearExamAccessToken();
         window.location.href = `/result.html?attempt_id=${attemptId}`;
     } catch (error: any) {
         showToast(error.message || 'Submission failed. Please try again.', 'error');
@@ -515,7 +578,7 @@ async function submitExam(auto = false) {
         }
 
         if (currentAttempt && examData) {
-            startTimer(currentAttempt.started_at, examData.duration_minutes);
+            startTimer();
             startLiveSync();
         }
     }

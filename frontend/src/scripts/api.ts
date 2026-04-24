@@ -1,4 +1,4 @@
-import { getAuthToken, API_BASE_URL } from './utils';
+import { buildApiUrl, getAuthToken } from './utils';
 
 function shouldSetJsonContentType(body: BodyInit | null | undefined): boolean {
     return !!body && !(body instanceof FormData);
@@ -22,7 +22,7 @@ export async function apiFetch<T = unknown>(
     let response: Response;
 
     try {
-        response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        response = await fetch(buildApiUrl(endpoint), {
             ...options,
             headers,
         });
@@ -47,10 +47,41 @@ export async function apiFetch<T = unknown>(
               : await response.text().catch(() => null);
 
     if (!response.ok) {
-        const message =
-            payload && typeof payload === 'object' && 'detail' in payload
-                ? String((payload as { detail?: string }).detail || 'API request failed')
-                : 'API request failed';
+        let message = `Request failed with status ${response.status}.`;
+
+        if (payload && typeof payload === 'object' && 'detail' in payload) {
+            const detail = (payload as { detail?: unknown }).detail;
+            if (typeof detail === 'string' && detail.trim()) {
+                message = detail;
+            } else if (Array.isArray(detail) && detail.length) {
+                message = detail
+                    .map((entry) => {
+                        if (typeof entry === 'string') return entry;
+                        if (
+                            entry &&
+                            typeof entry === 'object' &&
+                            'msg' in entry &&
+                            typeof (entry as { msg?: unknown }).msg === 'string'
+                        ) {
+                            return String((entry as { msg: string }).msg);
+                        }
+                        return null;
+                    })
+                    .filter((entry): entry is string => Boolean(entry))
+                    .join('; ');
+            }
+        } else if (typeof payload === 'string' && payload.trim()) {
+            const trimmed = payload.trim();
+            const looksLikeHtml = /^<!doctype html>|^<html[\s>]/i.test(trimmed);
+            if (!looksLikeHtml) {
+                message = trimmed;
+            } else if (response.status >= 500) {
+                message = `Server error (${response.status}). Check the backend logs.`;
+            }
+        } else if (response.status >= 500) {
+            message = `Server error (${response.status}). Check the backend logs.`;
+        }
+
         throw new Error(message);
     }
 

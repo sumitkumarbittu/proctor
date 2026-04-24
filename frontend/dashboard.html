@@ -269,6 +269,10 @@
                         <input type="number" id="exam-duration" class="input" required min="1" value="60">
                     </div>
                     <div class="input-group w-full">
+                        <label class="label" for="exam-start-time">Start time</label>
+                        <input type="datetime-local" id="exam-start-time" class="input">
+                    </div>
+                    <div class="input-group w-full">
                         <label class="label" for="exam-status">Status</label>
                         <select id="exam-status" class="select">
                             <option value="DRAFT">Draft</option>
@@ -278,9 +282,36 @@
                         </select>
                     </div>
                 </div>
+                <div class="input-group">
+                    <label class="label" for="exam-password">Exam password</label>
+                    <input type="password" id="exam-password" class="input" minlength="6" placeholder="Enter exam password">
+                    <p class="helper-text mt-1" id="exam-password-help">Students must enter this password before they can open the exam.</p>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" data-close-modal="exam-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="exam-submit-btn">Create Exam</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="exam-start-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="exam-start-modal-title">Open Exam</h3>
+                <button class="modal-close" data-close-modal="exam-start-modal" aria-label="Close exam start modal">×</button>
+            </div>
+            <form id="exam-start-form">
+                <p class="helper-text mb-2" id="exam-start-modal-copy">
+                    Enter the exam password to start or resume your attempt.
+                </p>
+                <div class="input-group">
+                    <label class="label" for="exam-start-password">Exam password</label>
+                    <input type="password" id="exam-start-password" class="input" required minlength="6" autocomplete="current-password" placeholder="Enter exam password">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="exam-start-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Open exam</button>
                 </div>
             </form>
         </div>

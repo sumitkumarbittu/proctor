@@ -1,13 +1,17 @@
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from jose import JWTError, jwt
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
-from app.models.attempt import Attempt, Response
+from app.core import security
+from app.core.config import settings
+from app.models.attempt import Attempt, AttemptStatus, Response
 from app.models.exam import (
     Assignment,
     Exam,
@@ -36,6 +40,54 @@ from app.schemas.exam import (
 router = APIRouter()
 
 DEFAULT_FOLDER_NAME = "My Questions"
+EXAM_ACCESS_TOKEN_TYPE = "exam_access"
+EXAM_PASSWORD_MIN_LENGTH = 6
+
+
+def _utcnow() -> datetime:
+    return datetime.utcnow()
+
+
+def _normalize_duration_minutes(duration_minutes: int) -> int:
+    if duration_minutes < 1:
+        raise HTTPException(status_code=400, detail="Duration must be at least 1 minute")
+    return duration_minutes
+
+
+def _normalize_exam_title(title: str | None) -> str:
+    normalized = (title or "").strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Exam title is required")
+    return normalized
+
+
+def _normalize_exam_password(password: str | None) -> str:
+    normalized = (password or "").strip()
+    if len(normalized) < EXAM_PASSWORD_MIN_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Exam password must be at least {EXAM_PASSWORD_MIN_LENGTH} characters long",
+        )
+    return normalized
+
+
+def _normalize_schedule_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _get_exam_schedule_close_time(exam: Exam) -> datetime | None:
+    if not exam.start_time:
+        return None
+    return exam.start_time + timedelta(minutes=max(exam.duration_minutes, 0))
+
+
+def _mark_schedule_update(exam: Exam, current_user: User) -> None:
+    exam.schedule_updated_by = current_user.id
+    exam.schedule_updated_at = _utcnow()
 
 
 def _exam_query():
@@ -149,8 +201,11 @@ def _snapshot_exam(exam: Exam) -> dict[str, Any]:
             "status": sorted_exam.status,
             "start_time": sorted_exam.start_time,
             "duration_minutes": sorted_exam.duration_minutes,
+            "password_hash": sorted_exam.password_hash,
             "created_by": sorted_exam.created_by,
             "created_at": sorted_exam.created_at,
+            "schedule_updated_by": sorted_exam.schedule_updated_by,
+            "schedule_updated_at": sorted_exam.schedule_updated_at,
             "teacher_ids": [assignment.teacher_id for assignment in sorted_exam.teacher_assignments],
             "student_ids": [assignment.student_id for assignment in sorted_exam.assignments],
             "question_links": [
@@ -221,6 +276,10 @@ def _sort_exam_questions(exam: Exam) -> Exam:
 def _serialize_exam(exam: Exam, current_user: User) -> dict[str, Any]:
     include_management = current_user.role in [UserRole.ADMIN, UserRole.EXAMINER]
     sorted_exam = _sort_exam_questions(exam)
+    can_manage_schedule = _has_exam_schedule_access(sorted_exam, current_user) if include_management else False
+    show_student_questions = current_user.role != UserRole.STUDENT or any(
+        attempt.student_id == current_user.id for attempt in sorted_exam.attempts
+    )
 
     return {
         "id": sorted_exam.id,
@@ -229,6 +288,13 @@ def _serialize_exam(exam: Exam, current_user: User) -> dict[str, Any]:
         "duration_minutes": sorted_exam.duration_minutes,
         "start_time": sorted_exam.start_time,
         "status": sorted_exam.status,
+        "requires_password": bool(sorted_exam.password_hash),
+        "can_manage_schedule": can_manage_schedule,
+        "can_manage_timer": can_manage_schedule,
+        "can_manage_password": can_manage_schedule,
+        "question_count": len(sorted_exam.questions),
+        "schedule_updated_at": sorted_exam.schedule_updated_at if include_management else None,
+        "schedule_updated_by": sorted_exam.schedule_updated_by if include_management else None,
         "created_by": sorted_exam.created_by,
         "created_at": sorted_exam.created_at,
         "creator": _serialize_user(sorted_exam.creator) if include_management else None,
@@ -244,7 +310,9 @@ def _serialize_exam(exam: Exam, current_user: User) -> dict[str, Any]:
             }
             for exam_question in sorted_exam.questions
             if exam_question.question
-        ],
+        ]
+        if include_management or show_student_questions
+        else [],
         "assignments": [
             {
                 "exam_id": assignment.exam_id,
@@ -281,9 +349,29 @@ def _has_exam_staff_access(exam: Exam, current_user: User) -> bool:
     )
 
 
+def _has_exam_schedule_access(exam: Exam, current_user: User) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    if current_user.role != UserRole.EXAMINER:
+        return False
+    if any(assignment.teacher_id == current_user.id for assignment in exam.teacher_assignments):
+        return True
+
+    # Backward-compatibility for exams that predate explicit teacher assignment.
+    return exam.created_by == current_user.id and not exam.teacher_assignments
+
+
 def _ensure_exam_staff_access(exam: Exam, current_user: User) -> None:
     if not _has_exam_staff_access(exam, current_user):
         raise HTTPException(status_code=403, detail="Exam is not available to this teacher")
+
+
+def _ensure_exam_schedule_access(exam: Exam, current_user: User) -> None:
+    if not _has_exam_schedule_access(exam, current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the assigned examiner or an admin can manage this exam schedule",
+        )
 
 
 def _folder_is_accessible(folder: QuestionFolder, current_user: User) -> bool:
@@ -321,6 +409,44 @@ def _ensure_question_owner_access(question: Question, current_user: User) -> Non
     if question.folder and _folder_is_accessible(question.folder, current_user):
         return
     raise HTTPException(status_code=403, detail="Question is not editable by this user")
+
+
+def _validate_exam_access_token(
+    request: Request,
+    *,
+    current_user: User,
+    exam_id: int,
+    attempt_id: int,
+) -> None:
+    access_token = request.headers.get("X-Exam-Access-Token")
+    if not access_token:
+        raise HTTPException(status_code=403, detail="Exam access verification is required")
+
+    try:
+        payload = jwt.decode(
+            access_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+    except JWTError as error:
+        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
+
+    if payload.get("type") != EXAM_ACCESS_TOKEN_TYPE:
+        raise HTTPException(status_code=403, detail="Exam access verification failed")
+
+    try:
+        token_user_id = int(payload.get("sub"))
+        token_attempt_id = int(payload.get("attempt_id"))
+        token_exam_id = int(payload.get("exam_id"))
+    except (TypeError, ValueError) as error:
+        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
+
+    if (
+        token_user_id != current_user.id
+        or token_attempt_id != attempt_id
+        or token_exam_id != exam_id
+    ):
+        raise HTTPException(status_code=403, detail="Exam access verification failed")
 
 
 async def _get_exam_or_404(db: AsyncSession, exam_id: int) -> Exam:
@@ -730,15 +856,24 @@ async def create_exam(
     exam_in: ExamCreate,
     current_user: User = Depends(deps.get_current_active_examiner),
 ) -> Any:
+    normalized_password = _normalize_exam_password(exam_in.password)
     exam = Exam(
-        title=exam_in.title,
-        instructions=exam_in.instructions,
-        start_time=exam_in.start_time,
-        duration_minutes=exam_in.duration_minutes,
+        title=_normalize_exam_title(exam_in.title),
+        instructions=(exam_in.instructions or "").strip() or None,
+        start_time=_normalize_schedule_datetime(exam_in.start_time),
+        duration_minutes=_normalize_duration_minutes(exam_in.duration_minutes),
+        password_hash=security.get_password_hash(normalized_password),
         status=exam_in.status,
         created_by=current_user.id,
+        schedule_updated_by=current_user.id,
+        schedule_updated_at=_utcnow(),
     )
     db.add(exam)
+    await db.flush()
+
+    if current_user.role == UserRole.EXAMINER:
+        db.add(TeacherAssignment(exam_id=exam.id, teacher_id=current_user.id))
+
     await db.commit()
     exam = await _get_exam_or_404(db, exam.id)
     return _serialize_exam(exam, current_user)
@@ -801,6 +936,7 @@ async def read_exams(
 @router.get("/{exam_id}", response_model=ExamSchema)
 async def read_exam(
     exam_id: int,
+    request: Request,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -812,13 +948,31 @@ async def read_exam(
         is_assigned = any(
             assignment.student_id == current_user.id for assignment in exam.assignments
         )
-        has_attempt = any(
-            attempt.student_id == current_user.id for attempt in exam.attempts
+        student_attempt = next(
+            (
+                attempt
+                for attempt in exam.attempts
+                if attempt.student_id == current_user.id
+            ),
+            None,
         )
+        has_attempt = student_attempt is not None
         if not is_assigned and not has_attempt:
             raise HTTPException(status_code=403, detail="Exam is not available to this student")
         if exam.status == ExamStatus.DRAFT and not has_attempt:
             raise HTTPException(status_code=403, detail="Exam is not available yet")
+        if not has_attempt:
+            raise HTTPException(
+                status_code=403,
+                detail="Start the exam from the dashboard before opening exam content",
+            )
+        if student_attempt and student_attempt.status == AttemptStatus.IN_PROGRESS and exam.password_hash:
+            _validate_exam_access_token(
+                request,
+                current_user=current_user,
+                exam_id=exam.id,
+                attempt_id=student_attempt.id,
+            )
 
     return _serialize_exam(exam, current_user)
 
@@ -831,18 +985,37 @@ async def update_exam(
     current_user: User = Depends(deps.get_current_active_examiner),
 ) -> Any:
     exam = await _get_exam_or_404(db, exam_id)
-    _ensure_exam_staff_access(exam, current_user)
+    fields_set = getattr(exam_in, "__fields_set__", set())
+    schedule_fields_changed = any(
+        field_name in fields_set
+        for field_name in [
+            "duration_minutes",
+            "start_time",
+            "status",
+            "password",
+        ]
+    )
 
-    if exam_in.title is not None:
-        exam.title = exam_in.title
-    if exam_in.instructions is not None:
-        exam.instructions = exam_in.instructions
-    if exam_in.duration_minutes is not None:
-        exam.duration_minutes = exam_in.duration_minutes
-    if exam_in.start_time is not None:
-        exam.start_time = exam_in.start_time
-    if exam_in.status is not None:
+    if schedule_fields_changed:
+        _ensure_exam_schedule_access(exam, current_user)
+    else:
+        _ensure_exam_staff_access(exam, current_user)
+
+    if "title" in fields_set:
+        exam.title = _normalize_exam_title(exam_in.title)
+    if "instructions" in fields_set:
+        exam.instructions = (exam_in.instructions or "").strip() or None
+    if "duration_minutes" in fields_set and exam_in.duration_minutes is not None:
+        exam.duration_minutes = _normalize_duration_minutes(exam_in.duration_minutes)
+    if "start_time" in fields_set:
+        exam.start_time = _normalize_schedule_datetime(exam_in.start_time)
+    if "status" in fields_set and exam_in.status is not None:
         exam.status = exam_in.status
+    if "password" in fields_set and exam_in.password is not None:
+        exam.password_hash = security.get_password_hash(_normalize_exam_password(exam_in.password))
+
+    if schedule_fields_changed:
+        _mark_schedule_update(exam, current_user)
 
     await db.commit()
     exam = await _get_exam_or_404(db, exam_id)
@@ -994,7 +1167,7 @@ async def update_exam_status(
     current_user: User = Depends(deps.get_current_active_examiner),
 ) -> Any:
     exam = await _get_exam_or_404(db, exam_id)
-    _ensure_exam_staff_access(exam, current_user)
+    _ensure_exam_schedule_access(exam, current_user)
 
     new_status = status_update.get("status")
     if new_status:
@@ -1002,6 +1175,7 @@ async def update_exam_status(
             exam.status = ExamStatus(new_status)
         except ValueError as error:
             raise HTTPException(status_code=400, detail=f"Invalid status: {new_status}") from error
+        _mark_schedule_update(exam, current_user)
 
     await db.commit()
     return {"status": exam.status}

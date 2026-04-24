@@ -14,6 +14,10 @@ class AttemptBase(BaseModel):
 class AttemptCreate(AttemptBase):
     pass
 
+
+class AttemptStartRequest(BaseModel):
+    password: str
+
 class AttemptUpdate(BaseModel):
     responses: List[ResponseCreate]
 
@@ -41,12 +45,20 @@ class Attempt(AttemptBase):
     student_id: int
     status: AttemptStatus
     started_at: datetime
+    ends_at: Optional[datetime] = None
+    last_opened_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
+    remaining_seconds: int = 0
+    server_time: datetime
     student: Optional[AttemptStudent] = None
     result: Optional[AttemptResult] = None
 
     class Config:
         from_attributes = True
+
+
+class AttemptStartResponse(Attempt):
+    exam_access_token: Optional[str] = None
 
 
 class Evaluation(BaseModel):

@@ -229,6 +229,9 @@ async def _restore_exam(
     created_by = snapshot.get("created_by")
     if created_by is not None and await db.get(User, int(created_by)) is None:
         created_by = current_user.id
+    schedule_updated_by = snapshot.get("schedule_updated_by")
+    if schedule_updated_by is not None and await db.get(User, int(schedule_updated_by)) is None:
+        schedule_updated_by = None
 
     exam = Exam(
         id=item.original_id,
@@ -237,7 +240,10 @@ async def _restore_exam(
         status=_enum_or_default(ExamStatus, snapshot.get("status"), ExamStatus.DRAFT),
         start_time=_parse_datetime(snapshot.get("start_time")),
         duration_minutes=int(snapshot.get("duration_minutes") or 60),
+        password_hash=snapshot.get("password_hash"),
         created_by=int(created_by) if created_by is not None else current_user.id,
+        schedule_updated_by=int(schedule_updated_by) if schedule_updated_by is not None else None,
+        schedule_updated_at=_parse_datetime(snapshot.get("schedule_updated_at")),
         created_at=_parse_datetime(snapshot.get("created_at")) or datetime.utcnow(),
     )
     db.add(exam)
@@ -357,6 +363,8 @@ async def _restore_attempt(
         student_id=int(student_id),
         status=_enum_or_default(AttemptStatus, snapshot.get("status"), AttemptStatus.IN_PROGRESS),
         started_at=_parse_datetime(snapshot.get("started_at")) or datetime.utcnow(),
+        ends_at=_parse_datetime(snapshot.get("ends_at")),
+        last_opened_at=_parse_datetime(snapshot.get("last_opened_at")),
         submitted_at=_parse_datetime(snapshot.get("submitted_at")),
     )
     db.add(attempt)
