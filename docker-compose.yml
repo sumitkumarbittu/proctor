@@ -31,6 +31,10 @@ services:
     environment:
       - POSTGRES_SERVER=db
       - DATABASE_URL=
+      - WAIT_FOR_DB_HOST=db
+      - RUN_MIGRATIONS_ON_STARTUP=true
+      - CREATE_SUPERUSER_ON_STARTUP=true
+      - UVICORN_RELOAD=true
     healthcheck:
       test:
         [

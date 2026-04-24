@@ -10,7 +10,17 @@ def get_engine():
     global engine, AsyncSessionLocal
 
     if engine is None:
-        engine = create_async_engine(settings.SQLALCHEMY_DATABASE_URI, future=True, echo=True)
+        engine = create_async_engine(
+            settings.SQLALCHEMY_DATABASE_URI,
+            future=True,
+            echo=settings.SQLALCHEMY_ECHO,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE_SECONDS,
+            pool_pre_ping=True,
+            connect_args=settings.SQLALCHEMY_CONNECT_ARGS,
+        )
         AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     return engine

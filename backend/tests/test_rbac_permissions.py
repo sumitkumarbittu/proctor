@@ -13,6 +13,7 @@ from app.api.v1.attempts import (
     log_proctoring_event,
     start_attempt,
 )
+from app.api.v1.reports import _activity_timeline
 from app.api.v1.exams import (
     _exam_query,
     _has_exam_schedule_access,
@@ -397,6 +398,34 @@ def test_schedule_datetime_normalizes_timezone_aware_values_to_naive_utc() -> No
 
     assert normalized == datetime(2026, 4, 24, 7, 0, 0)
     assert normalized.tzinfo is None
+
+
+def test_activity_timeline_groups_near_midnight_utc_by_ist_day() -> None:
+    creator = make_user(2, UserRole.EXAMINER)
+    student = make_user(9, UserRole.STUDENT)
+    exam = make_exam(creator)
+    attempt = Attempt(
+        id=401,
+        exam_id=exam.id,
+        student_id=student.id,
+        status=AttemptStatus.SUBMITTED,
+        started_at=datetime(2026, 4, 24, 20, 0, 0),
+        submitted_at=datetime(2026, 4, 24, 20, 5, 0),
+    )
+    attempt.exam = exam
+    attempt.student = student
+    attempt.result = None
+
+    timeline = _activity_timeline(
+        [attempt],
+        days=2,
+        now=datetime(2026, 4, 25, 1, 0, 0),
+    )
+
+    assert timeline[-1]["date"] == "2026-04-25"
+    assert timeline[-1]["label"] == "25 Apr IST"
+    assert timeline[-1]["started"] == 1
+    assert timeline[-1]["submitted"] == 1
 
 
 def test_attempt_serialization_uses_authoritative_attempt_end_time() -> None:

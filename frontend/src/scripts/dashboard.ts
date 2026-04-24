@@ -1,9 +1,12 @@
 import { apiFetch } from './api';
 import {
     escapeHtml,
+    formatDateTimeIst,
     formatTime,
+    fromDateTimeLocalIstValue,
     getStatusBadgeClass,
     getUserInitials,
+    toDateTimeLocalIstValue,
     removeAuthToken,
     showToast,
 } from './utils';
@@ -88,21 +91,6 @@ function getExamAccessStorageKey(attemptId: number) {
 
 function storeExamAccessToken(attemptId: number, token: string) {
     sessionStorage.setItem(getExamAccessStorageKey(attemptId), token);
-}
-
-function toDateTimeLocalValue(value?: string | null) {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    const offsetMs = date.getTimezoneOffset() * 60_000;
-    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
-}
-
-function fromDateTimeLocalValue(value: string) {
-    if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toISOString();
 }
 
 function formatRemainingTime(remainingSeconds?: number, status?: string) {
@@ -438,7 +426,7 @@ async function loadExams(silent = false) {
             card.className = 'card card-interactive exam-card animate-in';
             card.style.animationDelay = `${index * 45}ms`;
             const scheduleMeta = exam.start_time
-                ? `Starts ${new Date(exam.start_time).toLocaleString()}`
+                ? `Starts ${formatDateTimeIst(exam.start_time)}`
                 : 'No fixed start time';
             const passwordMeta = exam.requires_password ? 'Password protected' : 'Password required';
 
@@ -648,7 +636,7 @@ function openExamModal(exam?: any) {
     if (examTitle) examTitle.value = exam?.title || '';
     if (instructions) instructions.value = exam?.instructions || '';
     if (duration) duration.value = exam?.duration_minutes?.toString() || '60';
-    if (startTime) startTime.value = toDateTimeLocalValue(exam?.start_time);
+    if (startTime) startTime.value = toDateTimeLocalIstValue(exam?.start_time);
     if (status) status.value = exam?.status || 'DRAFT';
     if (password) {
         password.value = '';
@@ -676,7 +664,7 @@ async function handleExamSubmit(event: Event) {
             (document.getElementById('exam-duration') as HTMLInputElement).value,
             10,
         ),
-        start_time: fromDateTimeLocalValue(
+        start_time: fromDateTimeLocalIstValue(
             (document.getElementById('exam-start-time') as HTMLInputElement).value,
         ),
         status: (document.getElementById('exam-status') as HTMLSelectElement).value,
@@ -846,7 +834,7 @@ function renderAttemptsList(attempts: any[]): string {
                                     attempt.student?.name || attempt.student?.email || `Student #${attempt.student_id}`,
                                 )}</td>
                                 <td><span class="badge ${getStatusBadgeClass(attempt.status)}">${attempt.status}</span></td>
-                                <td class="text-sm">${new Date(attempt.started_at).toLocaleString()}</td>
+                                <td class="text-sm">${formatDateTimeIst(attempt.started_at)}</td>
                                 <td class="text-sm">${formatRemainingTime(attempt.remaining_seconds, attempt.status)}</td>
                                 <td>
                                     ${
@@ -1736,7 +1724,7 @@ async function loadResults(silent = false) {
                             <span class="badge ${getStatusBadgeClass(attempt.status)}">${attempt.status}</span>
                         </div>
                         <div class="exam-card-meta">
-                            <span>${new Date(attempt.started_at).toLocaleString()}</span>
+                            <span>${formatDateTimeIst(attempt.started_at)}</span>
                             <span>Open analytics</span>
                         </div>
                     </div>
@@ -2103,7 +2091,7 @@ function renderExamReport(report: any, index: number): string {
                 </div>
                 <div class="flex items-center gap-sm">
                     <span class="badge ${getStatusBadgeClass(exam.status || 'DRAFT')}">${escapeHtml(exam.status || 'DRAFT')}</span>
-                    <span class="chip">${exam.start_time ? new Date(exam.start_time).toLocaleString() : 'No start time'}</span>
+                    <span class="chip">${exam.start_time ? formatDateTimeIst(exam.start_time) : 'No start time'}</span>
                 </div>
             </div>
 
@@ -2324,7 +2312,7 @@ async function loadTrash(silent = false) {
                         <div style="font-weight:700;font-size:0.95rem;">${escapeHtml(item.label)}</div>
                         <div class="helper-text" style="font-size:0.82rem;">
                             <span class="badge badge-info" style="font-size:0.7rem;">${item.entity_type}</span>
-                            &nbsp;Deleted ${new Date(item.deleted_at).toLocaleString()}
+                            &nbsp;Deleted ${formatDateTimeIst(item.deleted_at)}
                         </div>
                     </div>
                     <div class="trash-item-actions">

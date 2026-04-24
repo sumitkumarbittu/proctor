@@ -4,6 +4,7 @@
     "type": "project",
     "files": [
       "docker-compose.yml",
+      "render.yaml",
       ".env.example",
       "README.md",
       "SRS.md",
@@ -21,6 +22,7 @@
     "files": [
       "backend/Dockerfile",
       "backend/requirements.txt",
+      "backend/requirements-dev.txt",
       "backend/alembic.ini"
     ],
     "tags": [
@@ -64,6 +66,7 @@
     "type": "config",
     "files": [
       "docker-compose.yml",
+      "render.yaml",
       "backend/Dockerfile",
       "frontend/Dockerfile"
     ],
@@ -90,6 +93,7 @@
     "type": "config",
     "files": [
       "backend/app/core/config.py",
+      "backend/app/core/datetime.py",
       ".env.example"
     ],
     "tags": [

@@ -13,10 +13,11 @@ app = FastAPI(
 
 # Set all CORS enabled origins
 if settings.BACKEND_CORS_ORIGINS:
+    cors_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials="*" not in cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -26,7 +27,13 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def healthcheck():
-    """Container readiness probe for Docker and local full-stack verification."""
+    """Lightweight readiness probe for hosted web services."""
+    return {"status": "ok"}
+
+
+@app.get("/health/db")
+async def database_healthcheck():
+    """Optional deep health probe for validating database connectivity."""
     try:
         session_factory = get_session_factory()
         async with session_factory() as session:

@@ -1,7 +1,10 @@
 import asyncio
+import os
 import pytest
 from typing import AsyncGenerator
 from httpx import AsyncClient
+
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 try:
     import pytest_asyncio

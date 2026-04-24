@@ -7,10 +7,10 @@ graph TD
     %% ============================================
     %% TOP-LEVEL MODULES
     %% ============================================
-    module-backend["⚙️ Backend<br/>FastAPI + Python 3.11"]
-    module-frontend["🖥️ Frontend<br/>Vite + TypeScript"]
-    module-database["🗄️ Database<br/>PostgreSQL 15"]
-    config-docker["🐳 Docker Compose<br/>Orchestration"]
+    module-backend["⚙️ Backend<br/>FastAPI + Python 3.11 + Render Web Service"]
+    module-frontend["🖥️ Frontend<br/>Vite + TypeScript + Render Static Site"]
+    module-database["🗄️ Database<br/>PostgreSQL 15 / Render Postgres"]
+    config-docker["🐳 Deployment Config<br/>Docker Compose + render.yaml"]
 
     project-root -->|contains| module-backend
     project-root -->|contains| module-frontend
@@ -23,7 +23,7 @@ graph TD
     %% BACKEND CORE
     %% ============================================
     service-entrypoint["📍 main.py<br/>App Entry Point"]
-    config-settings["⚙️ config.py<br/>Settings"]
+    config-settings["⚙️ config.py + datetime.py<br/>Settings + UTC/IST Helpers"]
     service-security["🔐 security.py<br/>JWT + Bcrypt"]
     service-deps["🛡️ deps.py<br/>Auth Guards"]
 
@@ -125,7 +125,7 @@ graph TD
     %% ============================================
     %% BACKEND DATA ACCESS & SCHEMAS
     %% ============================================
-    service-db-session["💾 DB Session<br/>AsyncSessionLocal"]
+    service-db-session["💾 DB Session<br/>AsyncSessionLocal + low pool limits"]
     service-migrations["📦 Alembic<br/>Migrations"]
     feature-schemas["📐 Pydantic Schemas<br/>RBAC + trash response models"]
 
@@ -138,7 +138,7 @@ graph TD
     %% ============================================
     %% BACKEND INFRASTRUCTURE
     %% ============================================
-    utility-startup["🚀 start.sh<br/>Startup Script"]
+    utility-startup["🚀 start.sh<br/>Env-driven local startup"]
     utility-superuser["👑 create_superuser.py<br/>Admin Seeder"]
     feature-testing["🧪 Test Suite<br/>Smoke + focused RBAC helpers"]
 
@@ -182,7 +182,7 @@ graph TD
     %% ============================================
     component-api-client["📡 API Client<br/>apiFetch wrapper"]
     component-proctor["👁️ Proctor Class<br/>Browser Monitoring"]
-    component-utils["🔧 Utils<br/>Token, Time, Debounce"]
+    component-utils["🔧 Utils<br/>Token, IST Time, API URL, Debounce"]
     component-css-design["🎨 CSS Design System<br/>Variables + Components"]
     config-nginx["🔀 Nginx<br/>Reverse Proxy"]
 

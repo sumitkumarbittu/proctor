@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
+from app.core.datetime import to_ist_date, utc_now
 from app.models.attempt import Attempt, AttemptStatus, ProctoringLog, Response
 from app.models.exam import Assignment, Exam, ExamQuestion, ExamStatus, TeacherAssignment
 from app.models.user import User, UserRole
@@ -82,28 +83,29 @@ def _risk_distribution(attempts: list[Attempt]) -> list[dict[str, Any]]:
     ]
 
 
-def _activity_timeline(attempts: list[Attempt], days: int = 7) -> list[dict[str, Any]]:
-    today = datetime.utcnow().date()
+def _activity_timeline(
+    attempts: list[Attempt],
+    days: int = 7,
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    today = to_ist_date(now or utc_now())
     timeline: dict[Any, dict[str, Any]] = {}
 
     for index in range(days - 1, -1, -1):
         current_date = today - timedelta(days=index)
         timeline[current_date] = {
             "date": current_date.isoformat(),
-            "label": current_date.strftime("%d %b"),
+            "label": f"{current_date.strftime('%d %b')} IST",
             "started": 0,
             "submitted": 0,
             "evaluated": 0,
         }
 
     for attempt in attempts:
-        started_at = attempt.started_at.date() if attempt.started_at else None
-        submitted_at = attempt.submitted_at.date() if attempt.submitted_at else None
-        evaluated_at = (
-            attempt.result.published_at.date()
-            if attempt.result and attempt.result.published_at
-            else None
-        )
+        started_at = to_ist_date(attempt.started_at)
+        submitted_at = to_ist_date(attempt.submitted_at)
+        evaluated_at = to_ist_date(attempt.result.published_at if attempt.result else None)
 
         if started_at in timeline:
             timeline[started_at]["started"] += 1

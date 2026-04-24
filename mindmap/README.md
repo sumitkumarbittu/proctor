@@ -2,7 +2,7 @@
 
 This folder contains a structured, visualization-friendly architecture map of the **Online Examination and Proctoring System (OEPS)**.
 
-Latest synced change: `chg-007` — exam scheduling ownership, password-gated start/resume, server-authoritative attempt timing, and non-terminating proctor flag flow.
+Latest synced change: `chg-008` — IST frontend timestamp display, IST report date bucketing, and Render Web Service/Static Site/Postgres deployment readiness.
 
 ## File Reference
 

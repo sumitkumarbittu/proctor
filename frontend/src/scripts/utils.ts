@@ -38,6 +38,91 @@ export function formatTime(totalSeconds: number): string {
         .padStart(2, '0')}`;
 }
 
+const IST_TIME_ZONE = 'Asia/Kolkata';
+const IST_OFFSET_MINUTES = 330;
+
+function hasExplicitTimeZone(value: string): boolean {
+    return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+}
+
+export function parseApiDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const normalized = hasExplicitTimeZone(trimmed) ? trimmed : `${trimmed}Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+}
+
+export function formatDateTimeIst(value: string | Date | null | undefined): string {
+    const date = typeof value === 'string' ? parseApiDate(value) : value;
+    if (!date || Number.isNaN(date.getTime())) return '—';
+
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: IST_TIME_ZONE,
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+    }).format(date);
+}
+
+export function formatDateTimeIstCompact(value: string | Date | null | undefined): string {
+    const date = typeof value === 'string' ? parseApiDate(value) : value;
+    if (!date || Number.isNaN(date.getTime())) return '—';
+
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: IST_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(date);
+}
+
+function pad2(value: number): string {
+    return value.toString().padStart(2, '0');
+}
+
+export function toDateTimeLocalIstValue(value?: string | null): string {
+    const date = parseApiDate(value || null);
+    if (!date) return '';
+
+    const istMs = date.getTime() + IST_OFFSET_MINUTES * 60_000;
+    const ist = new Date(istMs);
+    return `${ist.getUTCFullYear()}-${pad2(ist.getUTCMonth() + 1)}-${pad2(ist.getUTCDate())}T${pad2(
+        ist.getUTCHours(),
+    )}:${pad2(ist.getUTCMinutes())}`;
+}
+
+export function fromDateTimeLocalIstValue(value: string): string | null {
+    if (!value) return null;
+    const match = value.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
+    if (!match) return null;
+
+    const year = Number.parseInt(match[1], 10);
+    const month = Number.parseInt(match[2], 10);
+    const day = Number.parseInt(match[3], 10);
+    const hour = Number.parseInt(match[4], 10);
+    const minute = Number.parseInt(match[5], 10);
+    const second = match[6] ? Number.parseInt(match[6], 10) : 0;
+
+    const utcMs =
+        Date.UTC(year, month - 1, day, hour, minute, second) - IST_OFFSET_MINUTES * 60_000;
+    const date = new Date(utcMs);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString();
+}
+
 export function debounce<T extends unknown[]>(
     func: (...args: T) => void,
     wait: number,

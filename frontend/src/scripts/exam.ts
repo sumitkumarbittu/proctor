@@ -1,6 +1,6 @@
 import { apiFetch } from './api';
 import { Proctor } from './proctor';
-import { debounce, escapeHtml, formatTime, showToast } from './utils';
+import { debounce, escapeHtml, formatTime, parseApiDate, showToast } from './utils';
 
 const urlParams = new URLSearchParams(window.location.search);
 const attemptId = urlParams.get('attempt_id');
@@ -88,15 +88,15 @@ function getAuthoritativeNow() {
 
 function syncAttemptTiming(attempt: any) {
     if (attempt?.server_time) {
-        const serverTimeMs = new Date(attempt.server_time).getTime();
-        if (!Number.isNaN(serverTimeMs)) {
-            serverTimeOffsetMs = serverTimeMs - Date.now();
+        const serverTime = parseApiDate(attempt.server_time);
+        if (serverTime) {
+            serverTimeOffsetMs = serverTime.getTime() - Date.now();
         }
     }
 
     if (attempt?.ends_at) {
-        const endsAtMs = new Date(attempt.ends_at).getTime();
-        attemptEndsAtMs = Number.isNaN(endsAtMs) ? null : endsAtMs;
+        const endsAt = parseApiDate(attempt.ends_at);
+        attemptEndsAtMs = endsAt ? endsAt.getTime() : null;
     } else {
         attemptEndsAtMs = null;
     }
