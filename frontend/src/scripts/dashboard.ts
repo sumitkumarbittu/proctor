@@ -10,24 +10,118 @@ import {
 let currentUser: any = null;
 let editingExamId: number | null = null;
 let editingUserId: number | null = null;
-const views = ['exams', 'results', 'users', 'questions', 'reports'] as const;
+const views = ['exams', 'results', 'users', 'questions', 'reports', 'trash'] as const;
 const REFRESH_INTERVAL_MS = 10000;
 let activeView: (typeof views)[number] = 'exams';
 let activeExamDetailId: number | null = null;
 let refreshTimer: number | null = null;
 let questionFolders: any[] = [];
+let managedUsers: any[] = [];
 let selectedQuestionFolderId: number | null = null;
+let userSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let questionSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let trashSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+// ── SVG icon snippets used throughout ─────────────────────────────────────────
+const ICON = {
+    edit: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+    trash: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+    detail: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>`,
+    restore: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>`,
+    folder: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    exam: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+    question: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    user: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+};
 
 function isStaffUser() {
     return currentUser?.role === 'admin' || currentUser?.role === 'examiner';
+}
+
+function isAdminUser() {
+    return currentUser?.role === 'admin';
+}
+
+function canManageUserEntry(user: any) {
+    return Boolean(user?.can_edit || user?.can_remove_access);
+}
+
+function getFolderShareSelections(containerId: string): number[] {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+
+    return Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked')).map(
+        (input) => Number.parseInt(input.value, 10),
+    );
+}
+
+function getEditableQuestionFolders() {
+    return questionFolders.filter((folder) => folder.can_edit);
+}
+
+function getFolderAccessCopy(folder: any) {
+    if (folder.access_level === 'owner') return 'You own this bank';
+    if (folder.access_level === 'admin') return 'Admin access';
+    return 'Shared with you';
+}
+
+function syncUserRoleOptions(selectedRole?: string) {
+    const roleSelect = document.getElementById('user-role-input') as HTMLSelectElement | null;
+    const adminOption = document.getElementById('user-role-option-admin') as HTMLOptionElement | null;
+    if (!roleSelect || !adminOption) return;
+
+    const adminAllowed = isAdminUser();
+    adminOption.disabled = !adminAllowed;
+    adminOption.hidden = !adminAllowed;
+
+    if (!adminAllowed && (selectedRole === 'admin' || roleSelect.value === 'admin')) {
+        roleSelect.value = 'examiner';
+    } else if (selectedRole) {
+        roleSelect.value = selectedRole;
+    }
+}
+
+async function loadExaminerDirectory() {
+    const examiners = await apiFetch<any[]>('/users/?role=examiner&limit=200');
+    return examiners.filter((user) => user.id !== currentUser?.id);
+}
+
+async function renderFolderShareOptions(containerId: string, selectedIds: number[] = []) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const examiners = await loadExaminerDirectory();
+    if (!examiners.length) {
+        container.innerHTML = '<p class="helper-text">No other examiners are available to share with right now.</p>';
+        return;
+    }
+
+    const selected = new Set(selectedIds);
+    container.innerHTML = examiners
+        .map(
+            (user) => `
+                <label class="assignment-option">
+                    <input
+                        type="checkbox"
+                        value="${user.id}"
+                        ${selected.has(user.id) ? 'checked' : ''}
+                    >
+                    <div>
+                        <strong>${escapeHtml(user.name || user.email)}</strong>
+                        <p class="helper-text">${escapeHtml(user.email)}${user.is_active ? '' : ' • Inactive'}</p>
+                    </div>
+                </label>
+            `,
+        )
+        .join('');
 }
 
 function renderEmptyState(icon: string, title: string, description: string): string {
     return `
         <div class="empty-state">
             <div class="empty-state-icon">${icon}</div>
-            <div class="empty-state-title">${title}</div>
-            <div class="empty-state-desc">${description}</div>
+            <div class="empty-state-title">${escapeHtml(title)}</div>
+            <div class="empty-state-desc">${escapeHtml(description)}</div>
         </div>
     `;
 }
@@ -60,8 +154,11 @@ function renderUserInfo() {
     const userAvatar = document.getElementById('user-avatar');
 
     if (userName) userName.textContent = name;
-    if (userRole) userRole.textContent = currentUser.role;
-    if (userAvatar) userAvatar.textContent = getUserInitials(currentUser.name, currentUser.email);
+    if (userRole) userRole.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    if (userAvatar) {
+        const initials = getUserInitials(currentUser.name, currentUser.email);
+        userAvatar.innerHTML = `<span style="font-weight:800;font-size:0.9rem;letter-spacing:-0.03em;">${initials}</span>`;
+    }
 }
 
 function startAutoRefresh() {
@@ -81,9 +178,10 @@ async function refreshActiveView(silent = false) {
 
     if (activeView === 'exams') await loadExams(silent);
     if (activeView === 'results') await loadResults(silent);
-    if (activeView === 'users' && currentUser.role === 'admin') await loadUsers(silent);
+    if (activeView === 'users' && isStaffUser()) await loadUsers(silent);
     if (activeView === 'questions' && isStaffUser()) await loadQuestions(silent);
     if (activeView === 'reports' && isStaffUser()) await loadReports(silent);
+    if (activeView === 'trash' && isStaffUser()) await loadTrash(silent);
 
     const examDetailModal = document.getElementById('exam-detail-modal');
     if (activeExamDetailId && examDetailModal?.classList.contains('active')) {
@@ -142,17 +240,43 @@ function setupModals() {
     document
         .getElementById('create-question-btn')
         ?.addEventListener('click', () => void openQuestionModal());
-    document.getElementById('create-folder-btn')?.addEventListener('click', () => openFolderModal());
+    document.getElementById('create-folder-btn')?.addEventListener('click', () => void openFolderModal());
     document.getElementById('exam-form')?.addEventListener('submit', handleExamSubmit);
     document.getElementById('user-form')?.addEventListener('submit', handleUserSubmit);
     document.getElementById('question-form')?.addEventListener('submit', handleQuestionSubmit);
     document.getElementById('folder-form')?.addEventListener('submit', handleFolderSubmit);
+    document.getElementById('question-edit-form')?.addEventListener('submit', handleQuestionEditSubmit);
+    document.getElementById('folder-edit-form')?.addEventListener('submit', handleFolderEditSubmit);
+
+    // MCQ section toggle for create modal
     document.getElementById('q-type')?.addEventListener('change', (event) => {
         const value = (event.target as HTMLSelectElement).value;
         const optionsSection = document.getElementById('mcq-options-section');
-        if (optionsSection) {
-            optionsSection.style.display = value === 'MCQ' ? 'block' : 'none';
-        }
+        if (optionsSection) optionsSection.style.display = value === 'MCQ' ? 'block' : 'none';
+    });
+    // MCQ section toggle for edit modal
+    document.getElementById('eq-type')?.addEventListener('change', (event) => {
+        const value = (event.target as HTMLSelectElement).value;
+        const optionsSection = document.getElementById('eq-mcq-section');
+        if (optionsSection) optionsSection.style.display = value === 'MCQ' ? 'block' : 'none';
+    });
+
+    // User search with debounce
+    document.getElementById('user-search-input')?.addEventListener('input', () => {
+        if (userSearchTimer) clearTimeout(userSearchTimer);
+        userSearchTimer = setTimeout(() => void loadUsers(true), 300);
+    });
+    document.getElementById('user-role-filter')?.addEventListener('change', () => void loadUsers(true));
+    document.getElementById('question-search-input')?.addEventListener('input', () => {
+        if (questionSearchTimer) clearTimeout(questionSearchTimer);
+        questionSearchTimer = setTimeout(() => void loadQuestions(true), 300);
+    });
+
+    // Trash type filter
+    document.getElementById('trash-type-filter')?.addEventListener('change', () => void loadTrash(true));
+    document.getElementById('trash-search-input')?.addEventListener('input', () => {
+        if (trashSearchTimer) clearTimeout(trashSearchTimer);
+        trashSearchTimer = setTimeout(() => void loadTrash(true), 300);
     });
 }
 
@@ -168,10 +292,17 @@ async function initDashboard() {
         setupNavigation();
         setupModals();
 
+        // Role-based nav visibility
         if (isStaffUser()) {
-            document.getElementById('admin-nav')?.classList.remove('hidden');
+            document.getElementById('staff-nav')?.classList.remove('hidden');
             document.getElementById('admin-controls')?.classList.remove('hidden');
+            document.getElementById('trash-nav-wrap')?.classList.remove('hidden');
+            document.getElementById('admin-nav')?.classList.remove('hidden');
         }
+        if (!isAdminUser()) {
+            document.getElementById('trash-user-option')?.remove();
+        }
+        syncUserRoleOptions();
 
         await refreshActiveView(false);
         startAutoRefresh();
@@ -285,9 +416,9 @@ async function loadExams(silent = false) {
                         isStaffUser()
                             ? `
                                 <div class="flex gap-xs">
-                                    <button class="icon-btn edit-exam" data-id="${exam.id}" title="Edit exam">✎</button>
-                                    <button class="icon-btn detail-exam" data-id="${exam.id}" title="Open details">⋯</button>
-                                    <button class="icon-btn danger delete-exam" data-id="${exam.id}" title="Delete exam">×</button>
+                                    <button class="icon-btn edit-exam" data-id="${exam.id}" title="Edit exam">${ICON.edit}</button>
+                                    <button class="icon-btn detail-exam" data-id="${exam.id}" title="Open details">${ICON.detail}</button>
+                                    <button class="icon-btn danger delete-exam" data-id="${exam.id}" title="Delete exam">${ICON.trash}</button>
                                 </div>
                             `
                             : '<div class="helper-text">Assigned exam</div>'
@@ -563,6 +694,7 @@ function renderAttemptsList(attempts: any[]): string {
                                                 ? `<a class="btn btn-ghost btn-sm" href="/result.html?attempt_id=${attempt.id}">Open report</a>`
                                                 : '<span class="text-sm text-muted">In progress</span>'
                                         }
+                                        <button class="btn btn-ghost btn-sm delete-attempt" data-id="${attempt.id}">Delete</button>
                                     </div>
                                 </td>
                             </tr>
@@ -718,6 +850,25 @@ async function openExamDetail(
             });
         });
 
+        content.querySelectorAll<HTMLElement>('.delete-attempt').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const attemptId = button.dataset.id;
+                if (!attemptId || !window.confirm('Delete this submission? It will move to Recently Deleted.')) {
+                    return;
+                }
+
+                try {
+                    await apiFetch(`/attempts/${attemptId}`, { method: 'DELETE' });
+                    showToast('Submission moved to Recently Deleted.', 'success');
+                    await openExamDetail(examId, { keepOpen: true });
+                    await loadResults(true);
+                    await loadAdminStats(true);
+                } catch (error: any) {
+                    showToast(error.message, 'error');
+                }
+            });
+        });
+
         content.querySelector<HTMLButtonElement>('#assign-btn')?.addEventListener('click', async () => {
             const teacherIds = Array.from(
                 content.querySelectorAll<HTMLInputElement>('.assign-teacher:checked'),
@@ -754,9 +905,15 @@ async function loadUsers(silent = false) {
     if (!tbody) return;
 
     try {
-        const users = await apiFetch<any[]>('/users/');
+        const q = (document.getElementById('user-search-input') as HTMLInputElement)?.value?.trim();
+        const roleFilter = (document.getElementById('user-role-filter') as HTMLSelectElement)?.value;
+        let url = '/users/?limit=200';
+        if (q) url += `&q=${encodeURIComponent(q)}`;
+        if (roleFilter) url += `&role=${encodeURIComponent(roleFilter)}`;
 
-        tbody.innerHTML = users
+        managedUsers = await apiFetch<any[]>(url);
+
+        tbody.innerHTML = managedUsers
             .map(
                 (user) => `
                     <tr>
@@ -777,14 +934,30 @@ async function loadUsers(silent = false) {
                             </span>
                         </td>
                         <td style="text-align: right;">
-                            <div class="flex gap-xs" style="justify-content: flex-end;">
-                                <button class="icon-btn edit-user" data-id="${user.id}" data-name="${encodeURIComponent(user.name || '')}" data-email="${encodeURIComponent(user.email)}" data-role="${user.role}" title="Edit user">
-                                    ✎
-                                </button>
+                            <div class="table-action-stack">
+                                <div class="flex gap-xs" style="justify-content: flex-end; flex-wrap: wrap;">
+                                    ${
+                                        user.can_edit
+                                            ? `<button class="icon-btn edit-user" data-id="${user.id}" title="Edit user">${ICON.edit}</button>`
+                                            : ''
+                                    }
+                                    ${
+                                        user.can_toggle_active
+                                            ? `<button class="btn btn-ghost btn-sm toggle-user-access" data-id="${user.id}" data-next-active="${user.is_active ? 'false' : 'true'}">${
+                                                  user.is_active ? 'Remove access' : 'Restore access'
+                                              }</button>`
+                                            : ''
+                                    }
+                                    ${
+                                        user.can_delete
+                                            ? `<button class="icon-btn danger delete-user" data-id="${user.id}" title="Delete user">${ICON.trash}</button>`
+                                            : ''
+                                    }
+                                </div>
                                 ${
-                                    user.id !== currentUser.id
-                                        ? `<button class="icon-btn danger delete-user" data-id="${user.id}" title="Delete user">×</button>`
-                                        : ''
+                                    canManageUserEntry(user) || user.can_delete
+                                        ? ''
+                                        : `<span class="table-action-note">${escapeHtml(user.protected_reason || 'View only')}</span>`
                                 }
                             </div>
                         </td>
@@ -804,12 +977,35 @@ async function loadUsers(silent = false) {
 function attachUserListeners() {
     document.querySelectorAll<HTMLElement>('.edit-user').forEach((button) => {
         button.addEventListener('click', () => {
-            openUserModal({
-                id: Number.parseInt(button.dataset.id || '', 10),
-                name: decodeURIComponent(button.dataset.name || ''),
-                email: decodeURIComponent(button.dataset.email || ''),
-                role: button.dataset.role,
-            });
+            const userId = Number.parseInt(button.dataset.id || '', 10);
+            const user = managedUsers.find((entry) => entry.id === userId);
+            if (!user) return;
+            openUserModal(user);
+        });
+    });
+
+    document.querySelectorAll<HTMLElement>('.toggle-user-access').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const id = button.dataset.id;
+            const nextActive = button.dataset.nextActive === 'true';
+            if (!id) return;
+
+            const prompt = nextActive
+                ? 'Restore access for this user?'
+                : 'Remove access for this user?';
+            if (!window.confirm(prompt)) return;
+
+            try {
+                await apiFetch(`/users/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ is_active: nextActive }),
+                });
+                showToast(nextActive ? 'Access restored.' : 'Access removed.', 'success');
+                await loadUsers(true);
+                await loadAdminStats(true);
+            } catch (error: any) {
+                showToast(error.message, 'error');
+            }
         });
     });
 
@@ -820,7 +1016,7 @@ function attachUserListeners() {
 
             try {
                 await apiFetch(`/users/${id}`, { method: 'DELETE' });
-                showToast('User deleted.', 'success');
+                showToast('User moved to Recently Deleted.', 'success');
                 await loadUsers(true);
                 await loadAdminStats(true);
             } catch (error: any) {
@@ -849,6 +1045,7 @@ function openUserModal(user?: any) {
         password.required = !user;
     }
     if (role) role.value = user?.role || 'student';
+    syncUserRoleOptions(user?.role || 'student');
 
     openModal('user-modal');
 }
@@ -908,7 +1105,8 @@ function populateQuestionFolderSelect() {
     const folderSelect = document.getElementById('q-folder') as HTMLSelectElement | null;
     if (!folderSelect) return;
 
-    folderSelect.innerHTML = questionFolders
+    const editableFolders = getEditableQuestionFolders();
+    folderSelect.innerHTML = editableFolders
         .map(
             (folder) => `
                 <option value="${folder.id}">
@@ -918,8 +1116,8 @@ function populateQuestionFolderSelect() {
         )
         .join('');
 
-    if (!questionFolders.length) {
-        folderSelect.innerHTML = '<option value="">Create a folder first</option>';
+    if (!editableFolders.length) {
+        folderSelect.innerHTML = '<option value="">Create or own a folder first</option>';
     }
 }
 
@@ -929,7 +1127,7 @@ function renderQuestionFolderToolbar() {
 
     if (!questionFolders.length) {
         toolbar.innerHTML = renderEmptyState(
-            'FD',
+            ICON.folder,
             'No folders yet',
             'Create your first question folder to organize a personal or shared question bank.',
         );
@@ -937,27 +1135,34 @@ function renderQuestionFolderToolbar() {
     }
 
     toolbar.innerHTML = `
-        <div class="card" style="padding: 1rem;">
-            <div class="section-title mb-1">Folder Filter</div>
-            <div class="flex gap-xs" style="flex-wrap: wrap;">
+        <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+            <div class="section-title mb-1">Folders</div>
+            <div class="trash-list-stack" style="max-height:280px; overflow-y:auto;">
+                ${questionFolders.map((folder) => {
+                    return `
+                        <div class="folder-card ${selectedQuestionFolderId === folder.id ? 'folder-active' : ''}" data-folder-id="${folder.id}">
+                            <div class="folder-card-icon">${ICON.folder}</div>
+                            <div>
+                                <div style="font-weight:700;font-size:0.95rem;">${escapeHtml(folder.name)}</div>
+                                <div class="helper-text" style="font-size:0.82rem;">
+                                    ${folder.question_count || 0} questions
+                                    • ${escapeHtml(getFolderAccessCopy(folder))}
+                                    ${folder.shared_with?.length ? ` • Shared with ${folder.shared_with.length} examiner${folder.shared_with.length === 1 ? '' : 's'}` : ''}
+                                </div>
+                            </div>
+                            <div class="folder-card-actions">
+                                ${folder.can_share ? `<button class="icon-btn edit-folder" data-id="${folder.id}" title="Edit folder">${ICON.edit}</button>` : ''}
+                                <button class="icon-btn ${selectedQuestionFolderId === folder.id ? 'btn-primary' : ''} folder-filter" data-folder="${folder.id}" title="Filter by folder" style="font-size:0.7rem;width:auto;padding:0 0.5rem;">${selectedQuestionFolderId === folder.id ? '✓' : 'Filter'}</button>
+                                ${folder.can_delete ? `<button class="icon-btn danger delete-folder" data-id="${folder.id}" title="Delete folder">${ICON.trash}</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div style="margin-top:0.75rem;">
                 <button class="btn btn-sm ${selectedQuestionFolderId === null ? 'btn-primary' : 'btn-ghost'} folder-filter" data-folder="">
-                    All folders
+                    Show all questions
                 </button>
-                ${questionFolders
-                    .map(
-                        (folder) => `
-                            <button
-                                class="btn btn-sm ${
-                                    selectedQuestionFolderId === folder.id ? 'btn-primary' : 'btn-ghost'
-                                } folder-filter"
-                                data-folder="${folder.id}"
-                            >
-                                ${escapeHtml(folder.name)}
-                                ${folder.access_level === 'shared' ? ' • Shared' : ''}
-                            </button>
-                        `,
-                    )
-                    .join('')}
             </div>
         </div>
     `;
@@ -972,6 +1177,30 @@ function renderQuestionFolderToolbar() {
             await loadQuestions(true);
         });
     });
+
+    toolbar.querySelectorAll<HTMLElement>('.edit-folder').forEach((button) => {
+        button.addEventListener('click', () => {
+            const id = Number(button.dataset.id);
+            const folder = questionFolders.find((f) => f.id === id);
+            if (!folder) return;
+            void openFolderEditModal(folder);
+        });
+    });
+
+    toolbar.querySelectorAll<HTMLElement>('.delete-folder').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const id = button.dataset.id;
+            if (!id || !window.confirm('Move this folder and all its questions to Recently Deleted?')) return;
+            try {
+                await apiFetch(`/exams/question-folders/${id}`, { method: 'DELETE' });
+                showToast('Folder moved to Recently Deleted.', 'success');
+                selectedQuestionFolderId = null;
+                await loadQuestions(true);
+            } catch (error: any) {
+                showToast(error.message, 'error');
+            }
+        });
+    });
 }
 
 async function loadQuestions(silent = false) {
@@ -983,7 +1212,15 @@ async function loadQuestions(silent = false) {
         renderQuestionFolderToolbar();
         populateQuestionFolderSelect();
 
-        const query = selectedQuestionFolderId ? `?folder_id=${selectedQuestionFolderId}` : '';
+        const params = new URLSearchParams();
+        const search = (document.getElementById('question-search-input') as HTMLInputElement | null)?.value?.trim();
+        if (selectedQuestionFolderId) {
+            params.set('folder_id', String(selectedQuestionFolderId));
+        }
+        if (search) {
+            params.set('q', search);
+        }
+        const query = params.toString() ? `?${params.toString()}` : '';
         const questions = await apiFetch<any[]>(`/exams/questions${query}`);
 
         if (!questions.length) {
@@ -1009,7 +1246,18 @@ async function loadQuestions(silent = false) {
                                         : ''
                                 }
                             </div>
-                            <button class="icon-btn danger delete-question" data-id="${question.id}" title="Delete question">×</button>
+                            <div class="question-card-actions">
+                                ${
+                                    question.can_edit
+                                        ? `<button class="icon-btn edit-question" data-id="${question.id}" title="Edit question">${ICON.edit}</button>`
+                                        : ''
+                                }
+                                ${
+                                    question.can_delete
+                                        ? `<button class="icon-btn danger delete-question" data-id="${question.id}" title="Delete question">${ICON.trash}</button>`
+                                        : ''
+                                }
+                            </div>
                         </div>
                         <p class="text-sm">${escapeHtml(question.prompt)}</p>
                         ${
@@ -1026,9 +1274,7 @@ async function loadQuestions(silent = false) {
                         <p class="helper-text mt-2">
                             ${escapeHtml(question.owner?.name || question.owner?.email || 'Personal bank')}
                             ${
-                                question.folder?.access_level === 'shared'
-                                    ? ' • Shared to you through a collaborator folder'
-                                    : ''
+                                question.folder ? ` • ${escapeHtml(getFolderAccessCopy(question.folder))}` : ''
                             }
                         </p>
                     </div>
@@ -1036,14 +1282,23 @@ async function loadQuestions(silent = false) {
             )
             .join('');
 
+        document.querySelectorAll<HTMLElement>('.edit-question').forEach((button) => {
+            button.addEventListener('click', () => {
+                const id = Number(button.dataset.id);
+                const question = questions.find((q: any) => q.id === id);
+                if (!question) return;
+                openQuestionEditModal(question);
+            });
+        });
+
         document.querySelectorAll<HTMLElement>('.delete-question').forEach((button) => {
             button.addEventListener('click', async () => {
                 const id = button.dataset.id;
-                if (!id || !window.confirm('Delete this question?')) return;
+                if (!id || !window.confirm('Move this question to Recently Deleted?')) return;
 
                 try {
                     await apiFetch(`/exams/questions/${id}`, { method: 'DELETE' });
-                    showToast('Question deleted.', 'success');
+                    showToast('Question moved to Recently Deleted.', 'success');
                     await loadQuestions(true);
                 } catch (error: any) {
                     showToast(error.message, 'error');
@@ -1062,7 +1317,7 @@ async function loadQuestions(silent = false) {
     }
 }
 
-function openFolderModal() {
+async function openFolderModal() {
     const title = document.getElementById('folder-modal-title');
     const submitButton = document.getElementById('folder-submit-btn');
     const name = document.getElementById('folder-name') as HTMLInputElement | null;
@@ -1072,6 +1327,7 @@ function openFolderModal() {
     if (submitButton) submitButton.textContent = 'Create Folder';
     if (name) name.value = '';
     if (description) description.value = '';
+    await renderFolderShareOptions('folder-share-list');
 
     openModal('folder-modal');
 }
@@ -1082,6 +1338,7 @@ async function handleFolderSubmit(event: Event) {
     const body = {
         name: (document.getElementById('folder-name') as HTMLInputElement).value,
         description: (document.getElementById('folder-description') as HTMLTextAreaElement).value,
+        share_with_teacher_ids: getFolderShareSelections('folder-share-list'),
     };
 
     try {
@@ -1099,10 +1356,11 @@ async function handleFolderSubmit(event: Event) {
 
 async function openQuestionModal() {
     await loadQuestionFolders();
+    const editableFolders = getEditableQuestionFolders();
 
-    if (!questionFolders.length) {
-        showToast('Create a question folder before adding questions.', 'warning');
-        openFolderModal();
+    if (!editableFolders.length) {
+        showToast('Create or own a question folder before adding questions.', 'warning');
+        void openFolderModal();
         return;
     }
 
@@ -1121,7 +1379,10 @@ async function openQuestionModal() {
     if (marks) marks.value = '1';
     if (correct) correct.value = '';
     if (folder) {
-        const preferredFolderId = selectedQuestionFolderId || questionFolders[0]?.id;
+        const preferredFolderId =
+            (selectedQuestionFolderId && editableFolders.some((entry) => entry.id === selectedQuestionFolderId)
+                ? selectedQuestionFolderId
+                : null) || editableFolders[0]?.id;
         folder.value = preferredFolderId ? preferredFolderId.toString() : '';
     }
 
@@ -1753,7 +2014,7 @@ async function loadReports(silent = false) {
                         reports.length
                             ? reports.map((report, index) => renderExamReport(report, index)).join('')
                             : renderEmptyState(
-                                  'RP',
+                                  ICON.detail,
                                   'Per-exam analytics unavailable',
                                   'The dashboard summary loaded, but detailed exam analytics could not be generated right now.',
                               )
@@ -1770,6 +2031,256 @@ async function loadReports(silent = false) {
             'Reports unavailable',
             error.message || 'Please try again in a moment.',
         );
+    }
+}
+
+// ── Trash / Recently Deleted ───────────────────────────────────────────────────
+async function refreshAfterTrashAction(entityType: string) {
+    const refreshers: Array<Promise<unknown>> = [loadTrash(true)];
+
+    if (entityType === 'user' && isStaffUser()) {
+        refreshers.push(loadUsers(true), loadAdminStats(true));
+    }
+
+    if (entityType === 'exam') {
+        refreshers.push(loadExams(true), loadResults(true));
+        if (isStaffUser()) {
+            refreshers.push(loadAdminStats(true), loadReports(true));
+        }
+        if (activeExamDetailId) {
+            refreshers.push(openExamDetail(activeExamDetailId, { keepOpen: true, silent: true }));
+        }
+    }
+
+    if (entityType === 'question' || entityType === 'folder') {
+        if (isStaffUser()) {
+            refreshers.push(loadQuestions(true));
+        }
+    }
+
+    if (entityType === 'attempt') {
+        refreshers.push(loadExams(true), loadResults(true));
+        if (isStaffUser()) {
+            refreshers.push(loadAdminStats(true));
+        }
+        if (activeExamDetailId) {
+            refreshers.push(openExamDetail(activeExamDetailId, { keepOpen: true, silent: true }));
+        }
+    }
+
+    await Promise.all(refreshers.map((task) => task.catch(() => undefined)));
+}
+
+async function loadTrash(silent = false) {
+    const container = document.getElementById('trash-list');
+    if (!container) return;
+
+    try {
+        const typeFilter = (document.getElementById('trash-type-filter') as HTMLSelectElement)?.value;
+        const search = (document.getElementById('trash-search-input') as HTMLInputElement | null)?.value?.trim();
+        const params = new URLSearchParams();
+        if (typeFilter) params.set('entity_type', typeFilter);
+        if (search) params.set('q', search);
+        const url = params.toString() ? `/trash/?${params.toString()}` : '/trash/';
+
+        const items = await apiFetch<any[]>(url);
+
+        if (!items.length) {
+            container.innerHTML = renderEmptyState(
+                ICON.trash,
+                'Nothing in trash',
+                'Deleted exams, questions, folders, and users will appear here.',
+            );
+            return;
+        }
+
+        container.innerHTML = `<div class="trash-list-stack">
+            ${items.map((item, index) => `
+                <div class="trash-item animate-in" style="animation-delay:${index * 30}ms;">
+                    <div class="trash-item-icon ${item.entity_type}">${
+                        item.entity_type === 'exam' ? ICON.exam
+                        : item.entity_type === 'question' ? ICON.question
+                        : item.entity_type === 'folder' ? ICON.folder
+                        : item.entity_type === 'attempt' ? ICON.detail
+                        : item.entity_type === 'user' ? ICON.user
+                        : ICON.trash
+                    }</div>
+                    <div class="trash-item-details">
+                        <div style="font-weight:700;font-size:0.95rem;">${escapeHtml(item.label)}</div>
+                        <div class="helper-text" style="font-size:0.82rem;">
+                            <span class="badge badge-info" style="font-size:0.7rem;">${item.entity_type}</span>
+                            &nbsp;Deleted ${new Date(item.deleted_at).toLocaleString()}
+                        </div>
+                    </div>
+                    <div class="trash-item-actions">
+                        ${
+                            item.can_restore
+                                ? `<button class="icon-btn trash-restore" data-trash-id="${item.id}" data-entity-type="${item.entity_type}" title="Restore item">${ICON.restore}</button>`
+                                : ''
+                        }
+                        ${
+                            item.can_permanent_delete
+                                ? `<button class="icon-btn danger trash-purge" data-trash-id="${item.id}" data-entity-type="${item.entity_type}" title="Permanently delete">${ICON.trash}</button>`
+                                : ''
+                        }
+                        ${
+                            item.can_restore || item.can_permanent_delete
+                                ? ''
+                                : '<span class="table-action-note">No actions available</span>'
+                        }
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+
+        container.querySelectorAll<HTMLElement>('.trash-restore').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.trashId;
+                const entityType = btn.dataset.entityType || '';
+                if (!id) return;
+                try {
+                    const response = await apiFetch<any>(`/trash/${id}/restore`, { method: 'POST' });
+                    showToast(response.message || 'Item restored successfully.', 'success');
+                    await refreshAfterTrashAction(entityType);
+                } catch (error: any) {
+                    showToast(error.message, 'error');
+                }
+            });
+        });
+
+        container.querySelectorAll<HTMLElement>('.trash-purge').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.trashId;
+                const entityType = btn.dataset.entityType || '';
+                if (!id || !window.confirm('Permanently delete this item? This cannot be undone.')) return;
+                try {
+                    await apiFetch(`/trash/${id}/permanent`, { method: 'DELETE' });
+                    showToast('Permanently deleted.', 'success');
+                    await refreshAfterTrashAction(entityType);
+                } catch (error: any) {
+                    showToast(error.message, 'error');
+                }
+            });
+        });
+    } catch (error: any) {
+        if (!silent) showToast(error.message, 'error');
+        container.innerHTML = renderEmptyState('!', 'Unable to load trash', error.message || 'Please try again.');
+    }
+}
+
+// ── Question edit modal ────────────────────────────────────────────────────────
+function populateEditFolderSelect(selectedFolderId?: number | null) {
+    const folderSelect = document.getElementById('eq-folder') as HTMLSelectElement | null;
+    if (!folderSelect) return;
+    const availableFolders = questionFolders.filter(
+        (folder) => folder.can_edit || folder.id === selectedFolderId,
+    );
+    folderSelect.innerHTML = availableFolders
+        .map(
+            (folder) => `
+                <option value="${folder.id}" ${folder.id === selectedFolderId ? 'selected' : ''}>
+                    ${escapeHtml(folder.name)}${folder.can_edit ? '' : ' (Current folder)'}
+                </option>
+            `,
+        )
+        .join('');
+}
+
+function openQuestionEditModal(question: any) {
+    const type = document.getElementById('eq-type') as HTMLSelectElement | null;
+    const prompt = document.getElementById('eq-prompt') as HTMLTextAreaElement | null;
+    const marks = document.getElementById('eq-marks') as HTMLInputElement | null;
+    const correct = document.getElementById('eq-correct') as HTMLInputElement | null;
+    const idInput = document.getElementById('eq-id') as HTMLInputElement | null;
+    const mcqSection = document.getElementById('eq-mcq-section');
+
+    if (idInput) idInput.value = String(question.id);
+    if (type) type.value = question.type || 'MCQ';
+    if (prompt) prompt.value = question.prompt || '';
+    if (marks) marks.value = String(question.marks || 1);
+    if (correct) correct.value = question.correct_option || '';
+
+    if (mcqSection) mcqSection.style.display = question.type === 'MCQ' ? 'block' : 'none';
+
+    const optionInputs = document.querySelectorAll<HTMLInputElement>('.eq-option');
+    optionInputs.forEach((input, i) => {
+        input.value = question.options?.[i] || '';
+    });
+
+    populateEditFolderSelect(question.folder_id);
+    openModal('question-edit-modal');
+}
+
+async function handleQuestionEditSubmit(event: Event) {
+    event.preventDefault();
+
+    const id = (document.getElementById('eq-id') as HTMLInputElement).value;
+    const type = (document.getElementById('eq-type') as HTMLSelectElement).value;
+    const folderId = Number.parseInt((document.getElementById('eq-folder') as HTMLSelectElement).value, 10);
+    const body: any = {
+        type,
+        prompt: (document.getElementById('eq-prompt') as HTMLTextAreaElement).value,
+        marks: Number.parseInt((document.getElementById('eq-marks') as HTMLInputElement).value, 10),
+        folder_id: Number.isNaN(folderId) ? null : folderId,
+    };
+
+    if (type === 'MCQ') {
+        body.options = Array.from(document.querySelectorAll<HTMLInputElement>('.eq-option'))
+            .map((input) => input.value.trim())
+            .filter(Boolean);
+        body.correct_option = (document.getElementById('eq-correct') as HTMLInputElement).value;
+    }
+
+    try {
+        await apiFetch(`/exams/questions/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+        showToast('Question updated.', 'success');
+        closeModal('question-edit-modal');
+        await loadQuestions(true);
+    } catch (error: any) {
+        showToast(error.message, 'error');
+    }
+}
+
+// ── Folder edit modal ──────────────────────────────────────────────────────────
+async function openFolderEditModal(folder: any) {
+    const idInput = document.getElementById('ef-id') as HTMLInputElement | null;
+    const name = document.getElementById('ef-name') as HTMLInputElement | null;
+    const description = document.getElementById('ef-description') as HTMLTextAreaElement | null;
+
+    if (idInput) idInput.value = String(folder.id);
+    if (name) name.value = folder.name || '';
+    if (description) description.value = folder.description || '';
+    await renderFolderShareOptions(
+        'folder-edit-share-list',
+        (folder.shared_with || []).map((user: any) => user.id),
+    );
+
+    openModal('folder-edit-modal');
+}
+
+async function handleFolderEditSubmit(event: Event) {
+    event.preventDefault();
+
+    const id = (document.getElementById('ef-id') as HTMLInputElement).value;
+    const body = {
+        name: (document.getElementById('ef-name') as HTMLInputElement).value,
+        description: (document.getElementById('ef-description') as HTMLTextAreaElement).value,
+        share_with_teacher_ids: getFolderShareSelections('folder-edit-share-list'),
+    };
+
+    try {
+        await apiFetch(`/exams/question-folders/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+        showToast('Folder updated.', 'success');
+        closeModal('folder-edit-modal');
+        await loadQuestions(true);
+    } catch (error: any) {
+        showToast(error.message, 'error');
     }
 }
 

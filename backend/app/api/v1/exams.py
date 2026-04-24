@@ -1,12 +1,13 @@
 from typing import Any, Iterable, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
-from app.models.attempt import Attempt
+from app.models.attempt import Attempt, Response
 from app.models.exam import (
     Assignment,
     Exam,
@@ -17,6 +18,7 @@ from app.models.exam import (
     QuestionFolderShare,
     TeacherAssignment,
 )
+from app.models.trash import TrashedItem, TrashEntityType
 from app.models.user import User, UserRole
 from app.schemas.exam import (
     Exam as ExamSchema,
@@ -52,7 +54,7 @@ def _exam_query():
 def _folder_query():
     return select(QuestionFolder).options(
         selectinload(QuestionFolder.owner),
-        selectinload(QuestionFolder.questions),
+        selectinload(QuestionFolder.questions).selectinload(Question.exams),
         selectinload(QuestionFolder.shares).selectinload(QuestionFolderShare.user),
     )
 
@@ -63,6 +65,7 @@ def _question_query():
         selectinload(Question.folder)
         .selectinload(QuestionFolder.shares)
         .selectinload(QuestionFolderShare.user),
+        selectinload(Question.exams),
     )
 
 
@@ -81,7 +84,9 @@ def _serialize_folder(folder: QuestionFolder | None, current_user: User) -> dict
     if not folder:
         return None
 
-    is_owner = folder.owner_id == current_user.id or current_user.role == UserRole.ADMIN
+    is_owner = folder.owner_id == current_user.id
+    is_admin_access = current_user.role == UserRole.ADMIN and not is_owner
+    can_manage = current_user.role == UserRole.ADMIN or is_owner
     return {
         "id": folder.id,
         "name": folder.name,
@@ -91,8 +96,11 @@ def _serialize_folder(folder: QuestionFolder | None, current_user: User) -> dict
         "updated_at": folder.updated_at,
         "owner": _serialize_user(folder.owner),
         "shared_with": [_serialize_user(link.user) for link in folder.shares if link.user],
-        "access_level": "owner" if is_owner else "shared",
+        "access_level": "owner" if is_owner else "admin" if is_admin_access else "shared",
         "question_count": len(folder.questions),
+        "can_edit": can_manage,
+        "can_delete": can_manage,
+        "can_share": can_manage,
     }
 
 
@@ -103,18 +111,96 @@ def _serialize_question(
     include_folder: bool,
 ) -> dict[str, Any]:
     folder_payload = _serialize_folder(question.folder, current_user) if include_folder else None
+    can_manage = _question_is_accessible(question, current_user)
     return {
         "id": question.id,
         "type": question.type,
         "prompt": question.prompt,
         "options": question.options,
+        "correct_option": question.correct_option if current_user.role in [UserRole.ADMIN, UserRole.EXAMINER] else None,
         "marks": question.marks,
         "folder_id": question.folder_id,
         "created_by": question.created_by,
         "created_at": question.created_at,
         "folder": folder_payload,
         "owner": _serialize_user(question.folder.owner if question.folder else None),
+        "can_edit": can_manage,
+        "can_delete": can_manage,
     }
+
+
+def _snapshot_exam(exam: Exam) -> dict[str, Any]:
+    sorted_exam = _sort_exam_questions(exam)
+    return jsonable_encoder(
+        {
+            "id": sorted_exam.id,
+            "title": sorted_exam.title,
+            "instructions": sorted_exam.instructions,
+            "status": sorted_exam.status,
+            "start_time": sorted_exam.start_time,
+            "duration_minutes": sorted_exam.duration_minutes,
+            "created_by": sorted_exam.created_by,
+            "created_at": sorted_exam.created_at,
+            "teacher_ids": [assignment.teacher_id for assignment in sorted_exam.teacher_assignments],
+            "student_ids": [assignment.student_id for assignment in sorted_exam.assignments],
+            "question_links": [
+                {
+                    "question_id": exam_question.question_id,
+                    "order_index": exam_question.order_index or 0,
+                }
+                for exam_question in sorted_exam.questions
+                if exam_question.question_id
+            ],
+        }
+    )
+
+
+def _snapshot_question(question: Question) -> dict[str, Any]:
+    return jsonable_encoder(
+        {
+            "id": question.id,
+            "type": question.type,
+            "prompt": question.prompt,
+            "options": question.options,
+            "correct_option": question.correct_option,
+            "marks": question.marks,
+            "folder_id": question.folder_id,
+            "created_by": question.created_by,
+            "created_at": question.created_at,
+            "folder_access": (
+                {
+                    "id": question.folder.id,
+                    "name": question.folder.name,
+                    "owner_id": question.folder.owner_id,
+                    "shared_user_ids": [link.user_id for link in question.folder.shares],
+                }
+                if question.folder
+                else None
+            ),
+            "exam_links": [
+                {
+                    "exam_id": exam_question.exam_id,
+                    "order_index": exam_question.order_index or 0,
+                }
+                for exam_question in question.exams
+            ],
+        }
+    )
+
+
+def _snapshot_folder(folder: QuestionFolder) -> dict[str, Any]:
+    return jsonable_encoder(
+        {
+            "id": folder.id,
+            "name": folder.name,
+            "description": folder.description,
+            "owner_id": folder.owner_id,
+            "created_at": folder.created_at,
+            "updated_at": folder.updated_at,
+            "shared_user_ids": [link.user_id for link in folder.shares],
+            "questions": [_snapshot_question(question) for question in folder.questions],
+        }
+    )
 
 
 def _sort_exam_questions(exam: Exam) -> Exam:
@@ -216,10 +302,15 @@ def _question_is_accessible(question: Question, current_user: User) -> bool:
 
 
 def _ensure_question_owner_access(question: Question, current_user: User) -> None:
+    """Admin can always edit; teacher can edit if they own the question OR if the
+    question lives in a folder they own/share."""
     if current_user.role == UserRole.ADMIN:
         return
-    if question.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Question is not editable by this user")
+    if question.created_by == current_user.id:
+        return
+    if question.folder and _folder_is_accessible(question.folder, current_user):
+        return
+    raise HTTPException(status_code=403, detail="Question is not editable by this user")
 
 
 async def _get_exam_or_404(db: AsyncSession, exam_id: int) -> Exam:
@@ -266,6 +357,22 @@ async def _get_or_create_default_folder(db: AsyncSession, current_user: User) ->
     await db.flush()
     await db.refresh(folder)
     return folder
+
+
+async def _ensure_questions_do_not_have_responses(
+    db: AsyncSession,
+    question_ids: list[int],
+    *,
+    detail: str,
+) -> None:
+    if not question_ids:
+        return
+
+    result = await db.execute(
+        select(Response.id).filter(Response.question_id.in_(question_ids)).limit(1)
+    )
+    if result.scalars().first() is not None:
+        raise HTTPException(status_code=400, detail=detail)
 
 
 async def _validate_users_for_role(
@@ -370,6 +477,7 @@ async def create_question_folder(
 async def read_question_folders(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_examiner),
+    q: str | None = None,
 ) -> Any:
     stmt = _folder_query()
 
@@ -386,6 +494,15 @@ async def read_question_folders(
             or_(
                 QuestionFolder.owner_id == current_user.id,
                 shared_exists,
+            )
+        )
+
+    if q:
+        like_value = f"%{q.strip()}%"
+        stmt = stmt.filter(
+            or_(
+                QuestionFolder.name.ilike(like_value),
+                QuestionFolder.description.ilike(like_value),
             )
         )
 
@@ -417,6 +534,38 @@ async def update_question_folder(
     await db.commit()
     folder = await _get_folder_or_404(db, folder_id)
     return _serialize_folder(folder, current_user)
+@router.delete("/question-folders/{folder_id}")
+async def delete_question_folder(
+    folder_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_examiner),
+) -> Any:
+    folder = await _get_folder_or_404(db, folder_id)
+    _ensure_folder_owner_access(folder, current_user)
+
+    question_ids = [question.id for question in folder.questions]
+    await _ensure_questions_do_not_have_responses(
+        db,
+        question_ids,
+        detail="Delete submissions that use this folder's questions before deleting the folder.",
+    )
+
+    if question_ids:
+        await db.execute(delete(ExamQuestion).where(ExamQuestion.question_id.in_(question_ids)))
+
+    db.add(
+        TrashedItem(
+            entity_type=TrashEntityType.FOLDER,
+            original_id=folder.id,
+            label=folder.name,
+            snapshot=_snapshot_folder(folder),
+            deleted_by=current_user.id,
+        )
+    )
+    await db.delete(folder)
+    await db.commit()
+    return {"status": "deleted", "id": folder_id}
+
 
 
 @router.post("/questions", response_model=QuestionSchema)
@@ -453,6 +602,7 @@ async def read_questions(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_examiner),
     folder_id: int | None = None,
+    q: str | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
@@ -477,6 +627,15 @@ async def read_questions(
     if folder_id is not None:
         stmt = stmt.filter(Question.folder_id == folder_id)
 
+    if q:
+        like_value = f"%{q.strip()}%"
+        stmt = stmt.filter(
+            or_(
+                Question.prompt.ilike(like_value),
+                Question.folder.has(QuestionFolder.name.ilike(like_value)),
+            )
+        )
+
     result = await db.execute(
         stmt.order_by(Question.created_at.desc()).offset(skip).limit(limit)
     )
@@ -498,7 +657,9 @@ async def update_question(
     _ensure_question_owner_access(question, current_user)
 
     if question_in.folder_id is not None:
-        if question_in.folder_id:
+        if question_in.folder_id == question.folder_id:
+            pass
+        elif question_in.folder_id:
             folder = await _get_folder_or_404(db, question_in.folder_id)
             _ensure_folder_owner_access(folder, current_user)
             question.folder_id = folder.id
@@ -531,6 +692,21 @@ async def delete_question(
     question = await _get_question_or_404(db, question_id)
     _ensure_question_owner_access(question, current_user)
 
+    await _ensure_questions_do_not_have_responses(
+        db,
+        [question.id],
+        detail="Delete submissions that use this question before deleting it.",
+    )
+
+    db.add(
+        TrashedItem(
+            entity_type=TrashEntityType.QUESTION,
+            original_id=question.id,
+            label=question.prompt[:80],
+            snapshot=_snapshot_question(question),
+            deleted_by=current_user.id,
+        )
+    )
     await db.execute(delete(ExamQuestion).where(ExamQuestion.question_id == question_id))
     await db.delete(question)
     await db.commit()
@@ -672,6 +848,21 @@ async def delete_exam(
     exam = await _get_exam_or_404(db, exam_id)
     _ensure_exam_staff_access(exam, current_user)
 
+    if exam.attempts:
+        raise HTTPException(
+            status_code=400,
+            detail="Delete this exam's submissions from the Attempts tab before deleting the exam.",
+        )
+
+    db.add(
+        TrashedItem(
+            entity_type=TrashEntityType.EXAM,
+            original_id=exam.id,
+            label=exam.title,
+            snapshot=_snapshot_exam(exam),
+            deleted_by=current_user.id,
+        )
+    )
     await db.delete(exam)
     await db.commit()
     return {"status": "deleted", "id": exam_id}

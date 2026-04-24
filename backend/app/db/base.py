@@ -10,3 +10,4 @@ from app.models.exam import (
     TeacherAssignment,
 )
 from app.models.attempt import Attempt, Response, ProctoringLog, Result
+from app.models.trash import TrashedItem

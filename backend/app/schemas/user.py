@@ -25,4 +25,9 @@ class UserInDBBase(UserBase):
         from_attributes = True
 
 class User(UserInDBBase):
-    pass
+    can_edit: bool = False
+    can_remove_access: bool = False
+    can_change_role: bool = False
+    can_toggle_active: bool = False
+    can_delete: bool = False
+    protected_reason: Optional[str] = None

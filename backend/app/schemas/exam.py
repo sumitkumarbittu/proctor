@@ -43,6 +43,9 @@ class QuestionFolder(BaseModel):
     shared_with: List[UserPreview] = []
     access_level: str = "owner"
     question_count: int = 0
+    can_edit: bool = False
+    can_delete: bool = False
+    can_share: bool = False
 
     class Config:
         from_attributes = True
@@ -74,12 +77,15 @@ class Question(BaseModel):
     type: QuestionType
     prompt: str
     options: Optional[List[str]] = None
+    correct_option: Optional[str] = None
     marks: int = 1
     folder_id: Optional[int] = None
     created_by: Optional[int] = None
     created_at: datetime
     folder: Optional[QuestionFolder] = None
     owner: Optional[UserPreview] = None
+    can_edit: bool = False
+    can_delete: bool = False
 
     class Config:
         from_attributes = True

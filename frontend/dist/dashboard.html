@@ -5,10 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="OEPS dashboard for managing exams, users, results, and reports.">
     <title>Dashboard — OEPS</title>
-  <script type="module" crossorigin src="/assets/dashboard--stP7Bcy.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/utils-BjHaNtKY.js">
-  <link rel="modulepreload" crossorigin href="/assets/api-BV8riEN3.js">
-  <link rel="stylesheet" crossorigin href="/assets/utils-D8dMZ4lo.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- SF Symbols via Apple's CDN for the icon font -->
+    <style>
+        /* SF Symbols fallback using Unicode / emoji-compatible symbols */
+        .sf { font-style: normal; font-size: 1.1em; line-height: 1; }
+    </style>
+  <script type="module" crossorigin src="/assets/dashboard-C83be1-K.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-CzWt7XIS.js">
+  <link rel="modulepreload" crossorigin href="/assets/api-B4dv8x94.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-Bhh3NQNv.css">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -22,7 +29,9 @@
             </div>
 
             <div class="sidebar-user" id="user-info-card">
-                <div class="sidebar-user-avatar" id="user-avatar">?</div>
+                <div class="sidebar-user-avatar" id="user-avatar">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
                 <div class="sidebar-user-info">
                     <div class="sidebar-user-name" id="user-name">Loading...</div>
                     <div class="sidebar-user-role" id="user-role">—</div>
@@ -31,35 +40,66 @@
 
             <nav class="sidebar-nav">
                 <a href="#" class="nav-link active" data-view="exams" id="nav-exams">
-                    <span class="nav-icon">EX</span>
+                    <span class="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </span>
                     <span>Exams</span>
                 </a>
                 <a href="#" class="nav-link" data-view="results" id="nav-results">
-                    <span class="nav-icon">RS</span>
+                    <span class="nav-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </span>
                     <span>Results</span>
                 </a>
+
+                <div id="staff-nav" class="hidden">
+                    <div class="section-title mt-2 mb-1">Management</div>
+                    <div class="sidebar-nav">
+                        <a href="#" class="nav-link" data-view="questions" id="nav-questions">
+                            <span class="nav-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            </span>
+                            <span>Question Bank</span>
+                        </a>
+                        <a href="#" class="nav-link" data-view="reports" id="nav-reports">
+                            <span class="nav-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                            </span>
+                            <span>Reports</span>
+                        </a>
+                    </div>
+                </div>
 
                 <div id="admin-nav" class="hidden">
                     <div class="section-title mt-2 mb-1">Administration</div>
                     <div class="sidebar-nav">
                         <a href="#" class="nav-link" data-view="users" id="nav-users">
-                            <span class="nav-icon">US</span>
+                            <span class="nav-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            </span>
                             <span>Users</span>
                         </a>
-                        <a href="#" class="nav-link" data-view="questions" id="nav-questions">
-                            <span class="nav-icon">QB</span>
-                            <span>Question Bank</span>
-                        </a>
-                        <a href="#" class="nav-link" data-view="reports" id="nav-reports">
-                            <span class="nav-icon">RP</span>
-                            <span>Reports</span>
+                    </div>
+                </div>
+
+                <div id="trash-nav-wrap" class="hidden">
+                    <div class="section-title mt-2 mb-1">System</div>
+                    <div class="sidebar-nav">
+                        <a href="#" class="nav-link" data-view="trash" id="nav-trash">
+                            <span class="nav-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </span>
+                            <span>Recently Deleted</span>
                         </a>
                     </div>
                 </div>
             </nav>
 
             <div class="sidebar-footer">
-                <button id="logout-btn" class="btn btn-ghost btn-full">Log out</button>
+                <button id="logout-btn" class="btn btn-ghost btn-full">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Log out
+                </button>
             </div>
         </aside>
 
@@ -86,7 +126,10 @@
                         <h2 class="panel-title">Scheduled and active exams</h2>
                     </div>
                     <div id="admin-controls" class="hidden flex gap-sm">
-                        <button id="create-exam-btn" class="btn btn-primary">Create exam</button>
+                        <button id="create-exam-btn" class="btn btn-primary">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Create exam
+                        </button>
                     </div>
                 </div>
                 <div id="exam-list" class="exam-grid stagger">
@@ -113,7 +156,22 @@
                         <span class="section-title">Users</span>
                         <h2 class="panel-title">Manage access and roles</h2>
                     </div>
-                    <button id="create-user-btn" class="btn btn-primary">Add user</button>
+                    <div class="flex gap-sm items-center">
+                        <div class="search-bar" style="width:220px;">
+                            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="user-search-input" class="search-input" placeholder="Search users…">
+                        </div>
+                        <select id="user-role-filter" class="select" style="width:130px;padding:0.6rem 0.8rem;">
+                            <option value="">All roles</option>
+                            <option value="admin" id="admin-role-option">Admin</option>
+                            <option value="examiner">Examiner</option>
+                            <option value="student">Student</option>
+                        </select>
+                        <button id="create-user-btn" class="btn btn-primary">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add user
+                        </button>
+                    </div>
                 </div>
                 <div class="card table-card">
                     <table class="data-table" id="users-table">
@@ -137,9 +195,19 @@
                         <span class="section-title">Question Bank</span>
                         <h2 class="panel-title">Reusable questions and scoring</h2>
                     </div>
-                    <div class="flex gap-sm">
-                        <button id="create-folder-btn" class="btn btn-ghost">Add folder</button>
-                        <button id="create-question-btn" class="btn btn-primary">Add question</button>
+                    <div class="flex gap-sm items-center">
+                        <div class="search-bar" style="width:220px;">
+                            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="question-search-input" class="search-input" placeholder="Search questions…">
+                        </div>
+                        <button id="create-folder-btn" class="btn btn-ghost">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            Add folder
+                        </button>
+                        <button id="create-question-btn" class="btn btn-primary">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add question
+                        </button>
                     </div>
                 </div>
                 <div id="question-folder-toolbar" class="stack-list"></div>
@@ -155,9 +223,34 @@
                 </div>
                 <div id="reports-content" class="stack-list"></div>
             </section>
+
+            <section id="view-trash" class="view-panel hidden">
+                <div class="main-header">
+                    <div class="flex flex-col gap-xs">
+                        <span class="section-title">Recently Deleted</span>
+                        <h2 class="panel-title">Soft-deleted records</h2>
+                    </div>
+                    <div class="flex gap-sm items-center">
+                        <div class="search-bar" style="width:220px;">
+                            <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="trash-search-input" class="search-input" placeholder="Search deleted items…">
+                        </div>
+                        <select id="trash-type-filter" class="select" style="width:160px;padding:0.6rem 0.8rem;">
+                            <option value="">All types</option>
+                            <option value="exam">Exams</option>
+                            <option value="question">Questions</option>
+                            <option value="folder">Folders</option>
+                            <option value="attempt">Attempts</option>
+                            <option value="user" id="trash-user-option">Users</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="trash-list" class="stack-list"></div>
+            </section>
         </main>
     </div>
 
+    <!-- Exam Modal -->
     <div id="exam-modal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
@@ -196,6 +289,7 @@
         </div>
     </div>
 
+    <!-- User Modal -->
     <div id="user-modal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
@@ -220,7 +314,7 @@
                     <select id="user-role-input" class="select">
                         <option value="student">Student</option>
                         <option value="examiner">Examiner</option>
-                        <option value="admin">Admin</option>
+                        <option value="admin" id="user-role-option-admin">Admin</option>
                     </select>
                 </div>
                 <div class="modal-footer">
@@ -231,6 +325,7 @@
         </div>
     </div>
 
+    <!-- Question Modal -->
     <div id="question-modal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
@@ -250,7 +345,7 @@
                     <textarea id="q-prompt" class="textarea" rows="3" required placeholder="Enter the question"></textarea>
                 </div>
                 <div class="input-group">
-                    <label class="label" for="q-folder">Folder</label>
+                    <label class="label" for="q-folder">Folder <span style="color:var(--accent-red)">*</span></label>
                     <select id="q-folder" class="select"></select>
                 </div>
                 <div class="input-group">
@@ -278,6 +373,7 @@
         </div>
     </div>
 
+    <!-- Folder Modal -->
     <div id="folder-modal" class="modal-overlay">
         <div class="modal">
             <div class="modal-header">
@@ -293,6 +389,11 @@
                     <label class="label" for="folder-description">Description</label>
                     <textarea id="folder-description" class="textarea" rows="3" placeholder="Reusable questions for shared teaching teams"></textarea>
                 </div>
+                <div class="input-group">
+                    <label class="label" for="folder-share-list">Share with examiners</label>
+                    <p class="helper-text mb-1">Admins always retain access. Select examiners who should see and use this question bank.</p>
+                    <div id="folder-share-list" class="assignment-grid"></div>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" data-close-modal="folder-modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="folder-submit-btn">Create Folder</button>
@@ -301,6 +402,7 @@
         </div>
     </div>
 
+    <!-- Exam Detail Modal -->
     <div id="exam-detail-modal" class="modal-overlay">
         <div class="modal" style="max-width: 760px;">
             <div class="modal-header">
@@ -308,6 +410,85 @@
                 <button class="modal-close" data-close-modal="exam-detail-modal" aria-label="Close exam detail modal">×</button>
             </div>
             <div id="exam-detail-content"></div>
+        </div>
+    </div>
+
+    <!-- Question Edit Modal -->
+    <div id="question-edit-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Question</h3>
+                <button class="modal-close" data-close-modal="question-edit-modal" aria-label="Close edit modal">×</button>
+            </div>
+            <form id="question-edit-form">
+                <input type="hidden" id="eq-id">
+                <div class="input-group">
+                    <label class="label" for="eq-type">Type</label>
+                    <select id="eq-type" class="select">
+                        <option value="MCQ">Multiple Choice</option>
+                        <option value="SUBJECTIVE">Subjective</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="eq-prompt">Question</label>
+                    <textarea id="eq-prompt" class="textarea" rows="3" required></textarea>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="eq-folder">Folder</label>
+                    <select id="eq-folder" class="select"></select>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="eq-marks">Marks</label>
+                    <input type="number" id="eq-marks" class="input" min="1" value="1">
+                </div>
+                <div id="eq-mcq-section">
+                    <div class="section-title mb-1">Options</div>
+                    <div id="eq-options-list">
+                        <div class="input-group"><input type="text" class="input eq-option" placeholder="Option A"></div>
+                        <div class="input-group"><input type="text" class="input eq-option" placeholder="Option B"></div>
+                        <div class="input-group"><input type="text" class="input eq-option" placeholder="Option C"></div>
+                        <div class="input-group"><input type="text" class="input eq-option" placeholder="Option D"></div>
+                    </div>
+                    <div class="input-group">
+                        <label class="label" for="eq-correct">Correct answer</label>
+                        <input type="text" id="eq-correct" class="input" placeholder="Correct option text">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="question-edit-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Folder Edit Modal -->
+    <div id="folder-edit-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Folder</h3>
+                <button class="modal-close" data-close-modal="folder-edit-modal" aria-label="Close">×</button>
+            </div>
+            <form id="folder-edit-form">
+                <input type="hidden" id="ef-id">
+                <div class="input-group">
+                    <label class="label" for="ef-name">Name</label>
+                    <input type="text" id="ef-name" class="input" required>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="ef-description">Description</label>
+                    <textarea id="ef-description" class="textarea" rows="2"></textarea>
+                </div>
+                <div class="input-group">
+                    <label class="label" for="folder-edit-share-list">Share with examiners</label>
+                    <p class="helper-text mb-1">Admins always retain access. Select examiners who should see and use this question bank.</p>
+                    <div id="folder-edit-share-list" class="assignment-grid"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" data-close-modal="folder-edit-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save changes</button>
+                </div>
+            </form>
         </div>
     </div>
 

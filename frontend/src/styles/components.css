@@ -1511,3 +1511,217 @@
     align-items: flex-start;
   }
 }
+
+/* ===== SEARCH BAR ===== */
+.search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem 0.6rem 2.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ===== SVG AVATAR ===== */
+.sidebar-user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+/* ===== TRASH ITEMS ===== */
+.trash-item {
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--border-muted);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  transition: border-color var(--transition-base);
+}
+
+.trash-item:hover {
+  border-color: var(--border-strong);
+}
+
+.trash-item-icon {
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-red-soft);
+  color: var(--accent-red);
+}
+
+.trash-item-icon.exam { background: var(--accent-blue-soft); color: var(--accent-blue); }
+.trash-item-icon.question { background: var(--accent-teal-soft); color: var(--accent-teal); }
+.trash-item-icon.folder { background: var(--accent-amber-soft); color: var(--accent-amber); }
+.trash-item-icon.attempt { background: var(--accent-blue-soft); color: var(--accent-blue); }
+.trash-item-icon.user { background: var(--accent-red-soft); color: var(--accent-red); }
+
+.trash-list-stack {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.trash-item-details {
+  min-width: 0;
+}
+
+.trash-item-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ===== ICON BTN ===== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.72);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.icon-btn.danger:hover {
+  background: var(--accent-red-soft);
+  border-color: rgba(220,38,38,0.25);
+  color: var(--accent-red);
+}
+
+.icon-btn svg {
+  flex-shrink: 0;
+}
+
+/* ===== QUESTION CARD ===== */
+.question-card {
+  padding: 1.1rem 1.25rem;
+}
+
+.question-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.question-card-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* ===== DETAIL ROW ===== */
+.detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-divider {
+  height: 1px;
+  background: var(--border-muted);
+  margin: 1rem 0;
+}
+
+/* ===== FOLDER CARD ===== */
+.folder-card {
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.85rem;
+  align-items: center;
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--border-muted);
+  transition: border-color var(--transition-base);
+}
+
+.folder-card:hover {
+  border-color: var(--border-strong);
+}
+
+.folder-card-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-amber-soft);
+  color: var(--accent-amber);
+}
+
+.folder-card-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.table-action-stack {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
+.table-action-note {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+/* ===== NAV ICON SVG ===== */
+.nav-icon svg,
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -40,10 +40,11 @@ graph TD
     %% ============================================
     feature-api-router["🌐 API v1 Router<br/>/api/v1"]
     feature-auth-api["🔑 Auth API<br/>/auth/login"]
-    feature-users-api["👥 Users API<br/>/users"]
-    feature-exams-api["📝 Exams API<br/>/exams + /questions + /folders"]
-    feature-attempts-api["🎯 Attempts API<br/>/attempts + live-safe saves"]
+    feature-users-api["👥 Users API<br/>/users + RBAC access controls"]
+    feature-exams-api["📝 Exams API<br/>/exams + question-bank sharing + trash snapshots"]
+    feature-attempts-api["🎯 Attempts API<br/>/attempts + evaluation + submission delete"]
     feature-reports-api["📊 Reports API<br/>/reports + attempt analytics"]
+    feature-trash-api["🗑️ Trash API<br/>/trash + RBAC search/restore"]
 
     service-entrypoint -->|uses| feature-api-router
     feature-api-router -->|contains| feature-auth-api
@@ -51,12 +52,14 @@ graph TD
     feature-api-router -->|contains| feature-exams-api
     feature-api-router -->|contains| feature-attempts-api
     feature-api-router -->|contains| feature-reports-api
+    feature-api-router -->|contains| feature-trash-api
 
     feature-auth-api -->|uses| service-security
     feature-users-api -->|uses| service-deps
     feature-exams-api -->|uses| service-deps
     feature-attempts-api -->|uses| service-deps
     feature-reports-api -->|uses| service-deps
+    feature-trash-api -->|uses| service-deps
 
     %% ============================================
     %% BACKEND DATA MODELS
@@ -70,6 +73,7 @@ graph TD
     model-response["✍️ Response Model<br/>responses table"]
     model-proctoring-log["👁️ ProctoringLog<br/>proctoring_logs table"]
     model-result["🏆 Result Model<br/>results table"]
+    model-trash["🗑️ TrashItem<br/>entity-aware trash table"]
 
     module-backend -->|contains| model-user
     module-backend -->|contains| model-exam
@@ -80,6 +84,7 @@ graph TD
     module-backend -->|contains| model-response
     module-backend -->|contains| model-proctoring-log
     module-backend -->|contains| model-result
+    module-backend -->|contains| model-trash
 
     %% Model Relationships
     model-user -->|related_to| model-exam
@@ -94,26 +99,35 @@ graph TD
     %% API → Model connections
     feature-auth-api -->|reads_from| model-user
     feature-users-api -->|reads_from| model-user
+    feature-users-api -->|writes_to| model-trash
     feature-exams-api -->|reads_from| model-exam
     feature-exams-api -->|reads_from| model-question
     feature-exams-api -->|writes_to| model-exam-question
+    feature-exams-api -->|writes_to| model-trash
     feature-attempts-api -->|writes_to| model-attempt
     feature-attempts-api -->|writes_to| model-response
     feature-attempts-api -->|writes_to| model-proctoring-log
     feature-attempts-api -->|writes_to| model-result
+    feature-attempts-api -->|writes_to| model-trash
     feature-reports-api -->|reads_from| model-exam
     feature-reports-api -->|reads_from| model-assignment
     feature-reports-api -->|reads_from| model-attempt
     feature-reports-api -->|reads_from| model-response
     feature-reports-api -->|reads_from| model-proctoring-log
     feature-reports-api -->|reads_from| model-result
+    feature-trash-api -->|reads_from| model-trash
+    feature-trash-api -->|writes_to| model-trash
+    feature-trash-api -->|writes_to| model-user
+    feature-trash-api -->|writes_to| model-exam
+    feature-trash-api -->|writes_to| model-question
+    feature-trash-api -->|writes_to| model-attempt
 
     %% ============================================
     %% BACKEND DATA ACCESS & SCHEMAS
     %% ============================================
     service-db-session["💾 DB Session<br/>AsyncSessionLocal"]
     service-migrations["📦 Alembic<br/>Migrations"]
-    feature-schemas["📐 Pydantic Schemas<br/>Request/Response"]
+    feature-schemas["📐 Pydantic Schemas<br/>RBAC + trash response models"]
 
     module-backend -->|contains| service-db-session
     module-backend -->|contains| service-migrations
@@ -126,7 +140,7 @@ graph TD
     %% ============================================
     utility-startup["🚀 start.sh<br/>Startup Script"]
     utility-superuser["👑 create_superuser.py<br/>Admin Seeder"]
-    feature-testing["🧪 Test Suite<br/>Pytest (minimal)"]
+    feature-testing["🧪 Test Suite<br/>Smoke + focused RBAC helpers"]
 
     module-backend -->|contains| utility-startup
     module-backend -->|contains| utility-superuser
@@ -138,7 +152,7 @@ graph TD
     %% FRONTEND SCREENS
     %% ============================================
     screen-login["🔐 Login Screen<br/>index.html"]
-    screen-dashboard["📊 Dashboard Screen<br/>live collaboration workspace"]
+    screen-dashboard["📊 Dashboard Screen<br/>RBAC workspace + question-bank sharing + trash search"]
     screen-exam["📝 Exam Screen<br/>live question sync"]
     screen-result["🏆 Result Screen<br/>attempt analytics"]
 
@@ -156,7 +170,9 @@ graph TD
     screen-login -->|depends_on| feature-auth-api
     screen-dashboard -->|depends_on| feature-users-api
     screen-dashboard -->|depends_on| feature-exams-api
+    screen-dashboard -->|depends_on| feature-attempts-api
     screen-dashboard -->|depends_on| feature-reports-api
+    screen-dashboard -->|depends_on| feature-trash-api
     screen-exam -->|depends_on| feature-attempts-api
     screen-exam -->|depends_on| feature-exams-api
     screen-result -->|depends_on| feature-attempts-api
@@ -185,7 +201,7 @@ graph TD
     %% CROSS-CUTTING FLOWS
     %% ============================================
     flow-auth["🔄 Auth Flow<br/>Login → JWT → Guards"]
-    flow-exam-lifecycle["🔄 Exam Lifecycle<br/>Create → Assign → Live Sync → Evaluate"]
+    flow-exam-lifecycle["🔄 Exam Lifecycle<br/>Create → Share → Attempt → Trash/Restore"]
     flow-proctoring["🔄 Proctoring Flow<br/>Monitor → Log → Store"]
 
     project-root -->|contains| flow-auth
@@ -217,8 +233,8 @@ graph TD
 
     class project-root project
     class module-backend,module-frontend,module-database module
-    class feature-api-router,feature-auth-api,feature-users-api,feature-exams-api,feature-attempts-api,feature-reports-api,feature-schemas feature
-    class model-user,model-exam,model-question,model-exam-question,model-assignment,model-attempt,model-response,model-proctoring-log,model-result model
+    class feature-api-router,feature-auth-api,feature-users-api,feature-exams-api,feature-attempts-api,feature-reports-api,feature-trash-api,feature-schemas feature
+    class model-user,model-exam,model-question,model-exam-question,model-assignment,model-attempt,model-response,model-proctoring-log,model-result,model-trash model
     class screen-login,screen-dashboard,screen-exam,screen-result screen
     class service-entrypoint,service-security,service-deps,service-db-session,service-migrations service
     class config-docker,config-settings,config-nginx config

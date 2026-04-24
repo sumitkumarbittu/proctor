@@ -2,7 +2,7 @@
 
 This folder contains a structured, visualization-friendly architecture map of the **Online Examination and Proctoring System (OEPS)**.
 
-Latest synced change: `chg-003` — collaborative exam assignment, live question/dashboard refresh, student analytics expansion, and folder-based question sharing.
+Latest synced change: `chg-005` — RBAC alignment for Recently Deleted, examiner user management, creator-aware question-bank visibility/sharing, submission trash/restore, and dashboard permission parity.
 
 ## File Reference
 
@@ -91,11 +91,11 @@ for edge in edges:
 | Metric | Count |
 |--------|-------|
 | Total Nodes | 44 |
-| Total Edges | 66 |
+| Total Edges | 76 |
 | Groups | 9 |
-| Backend Files | ~30 |
+| Backend Files | ~35 |
 | Frontend Files | ~15 |
 | Data Models | 12 tables |
-| API Endpoints | ~40 |
+| API Endpoints | ~45 |
 | Frontend Screens | 4 |
-| Open Questions | 5 |
+| Open Questions | 6 |

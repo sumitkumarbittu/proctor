@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.api import deps
 from app.models.attempt import Attempt, AttemptStatus, ProctoringLog, Response, Result
 from app.models.exam import Assignment, Exam, ExamQuestion, ExamStatus, Question, TeacherAssignment
+from app.models.trash import TrashedItem, TrashEntityType
 from app.models.user import User, UserRole
 from app.schemas.attempt import Attempt as AttemptSchema
 from app.schemas.attempt import ProctorLogCreate, ResponseCreate
@@ -60,6 +62,54 @@ def _ensure_attempt_access(attempt: Attempt, current_user: User) -> None:
 def _ensure_exam_staff_for_attempt(attempt: Attempt, current_user: User) -> None:
     if not _has_exam_staff_access(attempt.exam, current_user):
         raise HTTPException(status_code=403, detail="Not enough permissions")
+
+
+def _snapshot_attempt(attempt: Attempt) -> dict[str, Any]:
+    return jsonable_encoder(
+        {
+            "id": attempt.id,
+            "exam_id": attempt.exam_id,
+            "student_id": attempt.student_id,
+            "status": attempt.status,
+            "started_at": attempt.started_at,
+            "submitted_at": attempt.submitted_at,
+            "exam_access": {
+                "created_by": attempt.exam.created_by if attempt.exam else None,
+                "teacher_ids": [
+                    assignment.teacher_id for assignment in (attempt.exam.teacher_assignments if attempt.exam else [])
+                ],
+            },
+            "responses": [
+                {
+                    "id": response.id,
+                    "question_id": response.question_id,
+                    "answer": response.answer,
+                    "marks_awarded": response.marks_awarded,
+                }
+                for response in attempt.responses
+            ],
+            "logs": [
+                {
+                    "id": log.id,
+                    "event_type": log.event_type,
+                    "severity": log.severity,
+                    "metadata_info": log.metadata_info,
+                    "created_at": log.created_at,
+                }
+                for log in attempt.logs
+            ],
+            "result": (
+                {
+                    "id": attempt.result.id,
+                    "total_score": attempt.result.total_score,
+                    "max_score": attempt.result.max_score,
+                    "published_at": attempt.result.published_at,
+                }
+                if attempt.result
+                else None
+            ),
+        }
+    )
 
 
 @router.get("/{attempt_id}", response_model=AttemptSchema)
@@ -193,6 +243,36 @@ async def read_attempt_responses(
         }
         for response in attempt.responses
     ]
+
+
+@router.delete("/{attempt_id}")
+async def delete_attempt(
+    attempt_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_examiner),
+) -> Any:
+    attempt = await _get_attempt_or_404(db, attempt_id)
+    _ensure_exam_staff_for_attempt(attempt, current_user)
+
+    db.add(
+        TrashedItem(
+            entity_type=TrashEntityType.ATTEMPT,
+            original_id=attempt.id,
+            label=f"Submission #{attempt.id}",
+            snapshot=_snapshot_attempt(attempt),
+            deleted_by=current_user.id,
+        )
+    )
+
+    if attempt.result:
+        await db.delete(attempt.result)
+    for response in list(attempt.responses):
+        await db.delete(response)
+    for log in list(attempt.logs):
+        await db.delete(log)
+    await db.delete(attempt)
+    await db.commit()
+    return {"status": "deleted", "id": attempt_id}
 
 
 @router.post("/{exam_id}/start", response_model=AttemptSchema)
