@@ -19,3 +19,5 @@ COPY . .
 # Add execute permission to start script
 COPY ./scripts/start.sh /start.sh
 RUN chmod +x /start.sh
+
+CMD ["/start.sh"]
