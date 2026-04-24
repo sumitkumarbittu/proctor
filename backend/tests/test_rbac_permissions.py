@@ -2,7 +2,9 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.exams import (
+    _exam_query,
     _ensure_question_owner_access,
+    _question_query,
     _question_is_accessible,
     _serialize_folder,
 )
@@ -67,6 +69,19 @@ def make_question(folder: QuestionFolder, *, created_by: int) -> Question:
     question.folder = folder
     question.exams = []
     return question
+
+
+def collect_option_paths(statement) -> set[tuple[str, ...]]:
+    paths: set[tuple[str, ...]] = set()
+    for option in statement._with_options:
+        path = tuple(
+            token.key
+            for token in option.path
+            if getattr(token, "key", None)
+        )
+        if path:
+            paths.add(path)
+    return paths
 
 
 def test_examiner_permissions_protect_self_and_admin() -> None:
@@ -156,6 +171,22 @@ def test_shared_question_access_allows_question_management_without_folder_owners
 
     assert _question_is_accessible(question, collaborator) is True
     _ensure_question_owner_access(question, collaborator)
+
+
+def test_question_query_eager_loads_folder_relationships_used_by_serializer() -> None:
+    paths = collect_option_paths(_question_query())
+
+    assert ("folder", "owner") in paths
+    assert ("folder", "questions") in paths
+    assert ("folder", "shares", "user") in paths
+
+
+def test_exam_query_eager_loads_folder_relationships_used_by_exam_detail() -> None:
+    paths = collect_option_paths(_exam_query())
+
+    assert ("questions", "question", "folder", "owner") in paths
+    assert ("questions", "question", "folder", "questions") in paths
+    assert ("questions", "question", "folder", "shares", "user") in paths
 
 
 def test_trash_permissions_follow_snapshot_context_for_examiner() -> None:

@@ -32,7 +32,26 @@ const ICON = {
     exam: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
     question: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
     user: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+    statExams: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`,
+    statLive: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1.5"/><path d="M8.8 15.2a4.5 4.5 0 0 1 0-6.4"/><path d="M15.2 15.2a4.5 4.5 0 0 0 0-6.4"/><path d="M5.8 18.2a8.7 8.7 0 0 1 0-12.4"/><path d="M18.2 18.2a8.7 8.7 0 0 0 0-12.4"/></svg>`,
+    statAttempts: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 4.5h6"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/></svg>`,
+    statReview: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><circle cx="11" cy="14" r="2.6"/><path d="m13 16 2.4 2.4"/></svg>`,
 };
+
+function getErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    if (
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof (error as { message?: unknown }).message === 'string'
+    ) {
+        return String((error as { message: string }).message);
+    }
+    return fallback;
+}
 
 function isStaffUser() {
     return currentUser?.role === 'admin' || currentUser?.role === 'examiner';
@@ -331,22 +350,22 @@ async function loadAdminStats(silent = false) {
         statsBar.classList.remove('hidden');
         statsBar.innerHTML = `
             <div class="stat-card blue animate-in">
-                <div class="stat-card-icon">EX</div>
+                <div class="stat-card-icon">${ICON.statExams}</div>
                 <div class="stat-card-value">${overview.total_exams}</div>
                 <div class="stat-card-label">Visible Exams</div>
             </div>
             <div class="stat-card green animate-in" style="animation-delay: 40ms;">
-                <div class="stat-card-icon">LV</div>
+                <div class="stat-card-icon">${ICON.statLive}</div>
                 <div class="stat-card-value">${overview.live_exams}</div>
                 <div class="stat-card-label">Live Exams</div>
             </div>
             <div class="stat-card amber animate-in" style="animation-delay: 80ms;">
-                <div class="stat-card-icon">AT</div>
+                <div class="stat-card-icon">${ICON.statAttempts}</div>
                 <div class="stat-card-value">${overview.total_attempts}</div>
                 <div class="stat-card-label">Attempts</div>
             </div>
             <div class="stat-card rose animate-in" style="animation-delay: 120ms;">
-                <div class="stat-card-icon">RV</div>
+                <div class="stat-card-icon">${ICON.statReview}</div>
                 <div class="stat-card-value">${overview.pending_evaluation}</div>
                 <div class="stat-card-label">Pending Review</div>
             </div>
@@ -585,6 +604,23 @@ function renderAvailableQuestionRows(examId: number, questions: any[]) {
         .join('');
 }
 
+function renderAvailableQuestionSection(
+    examId: number,
+    questions: any[],
+    errorMessage: string | null,
+) {
+    if (errorMessage) {
+        return `
+            <div class="card" style="padding: 1rem; border: 1px dashed var(--border-color);">
+                <div class="section-title mb-1">Question bank unavailable</div>
+                <p class="helper-text">${escapeHtml(errorMessage)}</p>
+            </div>
+        `;
+    }
+
+    return renderAvailableQuestionRows(examId, questions);
+}
+
 function renderAssignmentChecklist(
     users: any[],
     selectedIds: Set<number>,
@@ -715,19 +751,30 @@ async function openExamDetail(
     try {
         activeExamDetailId = examId;
 
-        const examPromise = apiFetch<any>(`/exams/${examId}`);
-        const questionsPromise = apiFetch<any[]>('/exams/questions').catch(() => []);
-        const attemptsPromise = apiFetch<any[]>(`/attempts/exam/${examId}`).catch(() => []);
-        const teachersPromise = apiFetch<any[]>('/users/?role=examiner').catch(() => []);
-        const studentsPromise = apiFetch<any[]>('/users/?role=student').catch(() => []);
-
-        const [exam, questions, attempts, teachers, students] = await Promise.all([
-            examPromise,
-            questionsPromise,
-            attemptsPromise,
-            teachersPromise,
-            studentsPromise,
+        const [examResult, questionsResult, attemptsResult, teachersResult, studentsResult] = await Promise.allSettled([
+            apiFetch<any>(`/exams/${examId}`),
+            apiFetch<any[]>('/exams/questions'),
+            apiFetch<any[]>(`/attempts/exam/${examId}`),
+            apiFetch<any[]>('/users/?role=examiner'),
+            apiFetch<any[]>('/users/?role=student'),
         ]);
+
+        if (examResult.status !== 'fulfilled') {
+            throw examResult.reason;
+        }
+
+        const exam = examResult.value;
+        const questions = questionsResult.status === 'fulfilled' ? questionsResult.value : [];
+        const attempts = attemptsResult.status === 'fulfilled' ? attemptsResult.value : [];
+        const teachers = teachersResult.status === 'fulfilled' ? teachersResult.value : [];
+        const students = studentsResult.status === 'fulfilled' ? studentsResult.value : [];
+        const availableQuestionsError =
+            questionsResult.status === 'rejected'
+                ? getErrorMessage(
+                      questionsResult.reason,
+                      'The question bank could not be loaded for this exam right now.',
+                  )
+                : null;
 
         const content = document.getElementById('exam-detail-content');
         const title = document.getElementById('exam-detail-title');
@@ -742,9 +789,9 @@ async function openExamDetail(
             (exam.assignments || []).map((assignment: any) => assignment.student_id),
         );
         const assignedQuestionIds = (exam.questions || []).map((entry: any) => entry.question_id);
-        const availableQuestions = questions.filter(
-            (question: any) => !assignedQuestionIds.includes(question.id),
-        );
+        const availableQuestions = availableQuestionsError
+            ? []
+            : questions.filter((question: any) => !assignedQuestionIds.includes(question.id));
 
         content.innerHTML = `
             <div class="tabs">
@@ -757,7 +804,7 @@ async function openExamDetail(
                 ${renderExamQuestions(exam)}
                 <div class="detail-divider"></div>
                 <div class="section-title mb-1">Add From Question Bank</div>
-                ${renderAvailableQuestionRows(examId, availableQuestions)}
+                ${renderAvailableQuestionSection(examId, availableQuestions, availableQuestionsError)}
             </div>
 
             <div id="tab-attempts" class="hidden">
@@ -1101,6 +1148,11 @@ async function loadQuestionFolders() {
     return questionFolders;
 }
 
+async function selectQuestionFolder(folderId: number | null) {
+    selectedQuestionFolderId = folderId;
+    await loadQuestions(true);
+}
+
 function populateQuestionFolderSelect() {
     const folderSelect = document.getElementById('q-folder') as HTMLSelectElement | null;
     if (!folderSelect) return;
@@ -1140,7 +1192,14 @@ function renderQuestionFolderToolbar() {
             <div class="trash-list-stack" style="max-height:280px; overflow-y:auto;">
                 ${questionFolders.map((folder) => {
                     return `
-                        <div class="folder-card ${selectedQuestionFolderId === folder.id ? 'folder-active' : ''}" data-folder-id="${folder.id}">
+                        <div
+                            class="folder-card ${selectedQuestionFolderId === folder.id ? 'folder-active' : ''}"
+                            data-folder-id="${folder.id}"
+                            role="button"
+                            tabindex="0"
+                            aria-pressed="${selectedQuestionFolderId === folder.id}"
+                            aria-label="Open question folder"
+                        >
                             <div class="folder-card-icon">${ICON.folder}</div>
                             <div>
                                 <div style="font-weight:700;font-size:0.95rem;">${escapeHtml(folder.name)}</div>
@@ -1167,14 +1226,33 @@ function renderQuestionFolderToolbar() {
         </div>
     `;
 
+    toolbar.querySelectorAll<HTMLElement>('.folder-card[data-folder-id]').forEach((card) => {
+        const activateFolder = async () => {
+            const folderId = Number.parseInt(card.dataset.folderId || '', 10);
+            if (Number.isNaN(folderId)) return;
+            await selectQuestionFolder(folderId);
+        };
+
+        card.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement;
+            if (target.closest('.folder-card-actions')) return;
+            void activateFolder();
+        });
+
+        card.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            void activateFolder();
+        });
+    });
+
     toolbar.querySelectorAll<HTMLElement>('.folder-filter').forEach((button) => {
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
             const folderValue = button.dataset.folder;
-            selectedQuestionFolderId =
-                folderValue && folderValue.trim()
-                    ? Number.parseInt(folderValue, 10)
-                    : null;
-            await loadQuestions(true);
+            const folderId =
+                folderValue && folderValue.trim() ? Number.parseInt(folderValue, 10) : null;
+            void selectQuestionFolder(Number.isNaN(folderId as number) ? null : folderId);
         });
     });
 

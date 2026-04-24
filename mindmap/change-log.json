@@ -1,5 +1,45 @@
 [
   {
+    "change_id": "chg-006",
+    "title": "Question-bank folder opening, exam question assignment, and dashboard icon hardening",
+    "summary": "Fixed a shared serializer/query bug that crashed question-bank reads and exam detail refreshes when folder metadata was serialized from async SQLAlchemy sessions. Dashboard folder cards now open inline, exam detail surfaces question-source failures instead of silently showing no addable questions, and the overview stat cards use SVG SF Symbol-style icons instead of EX/LV/AT/RV prefixes.",
+    "affected_nodes": [
+      "model-exam",
+      "model-question",
+      "model-exam-question",
+      "feature-exams-api",
+      "feature-testing",
+      "screen-dashboard",
+      "component-css-design",
+      "flow-exam-lifecycle"
+    ],
+    "files_changed": [
+      "backend/app/api/v1/exams.py",
+      "backend/tests/test_rbac_permissions.py",
+      "frontend/src/scripts/dashboard.ts",
+      "frontend/src/styles/layout.css",
+      "frontend/src/styles/components.css",
+      "frontend/dist/dashboard.html",
+      "frontend/dist/exam.html",
+      "frontend/dist/index.html",
+      "frontend/dist/result.html",
+      "frontend/dist/assets/dashboard-usEmvOn4.js",
+      "frontend/dist/assets/utils-BPN50kxQ.css",
+      "frontend/dist/assets/api-BtGJAk0a.js",
+      "frontend/dist/assets/exam-B_Y8ZbR8.js",
+      "frontend/dist/assets/main-DIIY2qDd.js",
+      "frontend/dist/assets/result-CG6uxpeZ.js",
+      "frontend/dist/assets/utils-CxMppg6e.js",
+      "mindmap/project-mindmap.json",
+      "mindmap/change-log.json",
+      "mindmap/README.md",
+      "mindmap/snapshots/snapshot-006.json"
+    ],
+    "started_at": "2026-04-24T07:02:00+05:30",
+    "completed_at": "2026-04-24T07:30:27+05:30",
+    "completed": true
+  },
+  {
     "change_id": "chg-005",
     "title": "RBAC, Recently Deleted, and question-bank access alignment",
     "summary": "Aligned backend and dashboard permissions for Recently Deleted, examiner user management, and question-bank visibility/sharing. Admins now retain default access, examiners can manage allowed student/examiner access without touching self/admin protections, submission deletion writes full attempt snapshots to trash, and role-filtered restore/search/purge behavior now follows entity-aware permissions instead of the deleting user alone.",
@@ -89,7 +129,9 @@
     "change_id": "chg-001",
     "title": "Initial project mindmap creation",
     "summary": "Deep analysis of the entire OEPS project structure. Created comprehensive mindmap with 44 nodes, 61 edges, and 9 groups covering all backend modules (FastAPI, SQLAlchemy models, API routes, schemas), frontend screens (Login, Dashboard, Exam, Result), services (API client, Proctor, Utils), CSS design system, infrastructure (Docker, Nginx), and cross-cutting flows (Auth, Exam Lifecycle, Proctoring).",
-    "affected_nodes": ["ALL — initial creation"],
+    "affected_nodes": [
+      "ALL \u2014 initial creation"
+    ],
     "files_changed": [
       "mindmap/project-mindmap.json",
       "mindmap/project-mindmap.mmd",

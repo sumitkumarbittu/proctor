@@ -302,6 +302,27 @@
   font-size: 1.1rem;
 }
 
+.stat-card-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+}
+
+.stat-card.green .stat-card-icon {
+  background: rgba(21, 128, 61, 0.1);
+  color: var(--accent-green);
+}
+
+.stat-card.amber .stat-card-icon {
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--accent-amber);
+}
+
+.stat-card.rose .stat-card-icon {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--accent-red);
+}
+
 .stat-card-value {
   font-size: 2rem;
   font-weight: 800;

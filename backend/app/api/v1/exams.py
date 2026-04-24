@@ -45,6 +45,15 @@ def _exam_query():
         .selectinload(ExamQuestion.question)
         .selectinload(Question.folder)
         .selectinload(QuestionFolder.owner),
+        selectinload(Exam.questions)
+        .selectinload(ExamQuestion.question)
+        .selectinload(Question.folder)
+        .selectinload(QuestionFolder.questions),
+        selectinload(Exam.questions)
+        .selectinload(ExamQuestion.question)
+        .selectinload(Question.folder)
+        .selectinload(QuestionFolder.shares)
+        .selectinload(QuestionFolderShare.user),
         selectinload(Exam.assignments).selectinload(Assignment.student),
         selectinload(Exam.teacher_assignments).selectinload(TeacherAssignment.teacher),
         selectinload(Exam.attempts),
@@ -62,6 +71,7 @@ def _folder_query():
 def _question_query():
     return select(Question).options(
         selectinload(Question.folder).selectinload(QuestionFolder.owner),
+        selectinload(Question.folder).selectinload(QuestionFolder.questions),
         selectinload(Question.folder)
         .selectinload(QuestionFolder.shares)
         .selectinload(QuestionFolderShare.user),

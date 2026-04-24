@@ -1684,10 +1684,17 @@
   background: rgba(255,255,255,0.72);
   border: 1px solid var(--border-muted);
   transition: border-color var(--transition-base);
+  cursor: pointer;
 }
 
 .folder-card:hover {
   border-color: var(--border-strong);
+}
+
+.folder-card:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.24);
+  outline-offset: 2px;
+  border-color: var(--accent-blue);
 }
 
 .folder-card-icon {

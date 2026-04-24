@@ -2,7 +2,7 @@
 
 This folder contains a structured, visualization-friendly architecture map of the **Online Examination and Proctoring System (OEPS)**.
 
-Latest synced change: `chg-005` — RBAC alignment for Recently Deleted, examiner user management, creator-aware question-bank visibility/sharing, submission trash/restore, and dashboard permission parity.
+Latest synced change: `chg-006` — question-bank folder open flow, exam question assignment refresh, async serializer hardening, and dashboard SF Symbol icon mapping.
 
 ## File Reference
 
