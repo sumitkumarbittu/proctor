@@ -7,7 +7,6 @@ from starlette.requests import Request
 
 from app.api.v1 import attempts as attempts_api
 from app.api.v1.attempts import (
-    _create_exam_access_token,
     _ensure_attempt_timing,
     _serialize_attempt,
     log_proctoring_event,
@@ -391,6 +390,31 @@ def test_exam_serialization_exposes_password_and_schedule_capabilities() -> None
     assert peer_payload["can_manage_schedule"] is False
 
 
+def test_exam_serialization_exposes_student_attempt_summary() -> None:
+    creator = make_user(2, UserRole.EXAMINER)
+    student = make_user(9, UserRole.STUDENT)
+    exam = make_exam(creator, password_hash="hashed")
+    attempt = Attempt(
+        id=401,
+        exam_id=exam.id,
+        student_id=student.id,
+        status=AttemptStatus.SUBMITTED,
+        started_at=datetime(2026, 4, 24, 10, 0, 0),
+        submitted_at=datetime(2026, 4, 24, 10, 20, 0),
+    )
+    attempt.exam = exam
+    attempt.student = student
+    attempt.result = None
+    exam.attempts = [attempt]
+
+    payload = _serialize_exam(exam, student)
+
+    assert payload["attempt_count"] == 1
+    assert payload["student_attempt_count"] == 1
+    assert payload["student_attempt_id"] == attempt.id
+    assert payload["student_attempt_status"] == "SUBMITTED"
+
+
 def test_schedule_datetime_normalizes_timezone_aware_values_to_naive_utc() -> None:
     aware = datetime(2026, 4, 24, 12, 30, 0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
 
@@ -525,11 +549,11 @@ def test_start_attempt_resume_stays_available_after_schedule_window_closes(
     assert response["id"] == attempt.id
     assert response["status"] == AttemptStatus.IN_PROGRESS
     assert response["remaining_seconds"] == 900
-    assert response["exam_access_token"]
+    assert response["exam_access_token"] is None
     assert attempt.last_opened_at == fixed_now
 
 
-def test_resume_attempt_requires_password_configuration(
+def test_resume_attempt_without_password_configuration_when_password_is_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixed_now = datetime(2026, 4, 24, 12, 0, 0)
@@ -553,17 +577,21 @@ def test_resume_attempt_requires_password_configuration(
     attempt.student = student
     attempt.result = None
 
-    db = _FakeAsyncSession([exam, attempt])
+    exam.password_required = False
+    db = _FakeAsyncSession([exam, attempt, attempt])
 
-    with pytest.raises(HTTPException, match="Exam password is not configured"):
-        asyncio.run(
-            start_attempt(
-                exam.id,
-                AttemptStartRequest(password="anything"),
-                db=db,
-                current_user=student,
-            )
+    response = asyncio.run(
+        start_attempt(
+            exam.id,
+            AttemptStartRequest(password=None),
+            db=db,
+            current_user=student,
         )
+    )
+
+    assert response["id"] == attempt.id
+    assert response["status"] == AttemptStatus.IN_PROGRESS
+    assert response["exam_access_token"] is None
 
 
 def test_log_proctoring_event_records_flag_without_submitting_attempt(
@@ -571,16 +599,6 @@ def test_log_proctoring_event_records_flag_without_submitting_attempt(
 ) -> None:
     fixed_now = datetime(2026, 4, 24, 10, 0, 0)
     monkeypatch.setattr(attempts_api, "_utcnow", lambda: fixed_now)
-    monkeypatch.setattr(
-        attempts_api.jwt,
-        "decode",
-        lambda token, secret, algorithms: {
-            "type": "exam_access",
-            "sub": "9",
-            "attempt_id": 501,
-            "exam_id": 301,
-        },
-    )
 
     creator = make_user(2, UserRole.EXAMINER)
     student = make_user(9, UserRole.STUDENT)
@@ -607,7 +625,7 @@ def test_log_proctoring_event_records_flag_without_submitting_attempt(
     request = Request(
         {
             "type": "http",
-            "headers": [(b"x-exam-access-token", b"test-token")],
+            "headers": [],
         }
     )
     db = _FakeAsyncSession([attempt])

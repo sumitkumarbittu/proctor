@@ -3,14 +3,12 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
-from jose import JWTError, jwt
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
 from app.core import security
-from app.core.config import settings
 from app.models.attempt import Attempt, AttemptStatus, ProctoringLog, Response, Result
 from app.models.exam import Assignment, Exam, ExamQuestion, ExamStatus, Question, TeacherAssignment
 from app.models.trash import TrashedItem, TrashEntityType
@@ -19,7 +17,6 @@ from app.schemas.attempt import Attempt as AttemptSchema
 from app.schemas.attempt import AttemptStartRequest, AttemptStartResponse, ProctorLogCreate, ResponseCreate
 
 router = APIRouter()
-EXAM_ACCESS_TOKEN_TYPE = "exam_access"
 
 
 def _utcnow() -> datetime:
@@ -103,67 +100,26 @@ def _serialize_attempt(attempt: Attempt, now: datetime | None = None) -> dict[st
     }
 
 
-def _create_exam_access_token(
-    attempt: Attempt,
-    current_user: User,
-    *,
-    now: datetime | None = None,
-) -> str:
-    issued_at = now or _utcnow()
-    expires_at = attempt.ends_at or (issued_at + timedelta(hours=8))
-    payload = {
-        "sub": str(current_user.id),
-        "type": EXAM_ACCESS_TOKEN_TYPE,
-        "attempt_id": attempt.id,
-        "exam_id": attempt.exam_id,
-        "iat": int(issued_at.timestamp()),
-        "exp": int(expires_at.timestamp()),
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-
 def _ensure_exam_access_token(
     request: Request,
     *,
     attempt: Attempt,
     current_user: User,
 ) -> None:
-    if current_user.role != UserRole.STUDENT:
+    # Exam access is persisted through the authenticated server session and
+    # attempt ownership. No browser-side exam token is required.
+    return
+
+
+def _exam_requires_password(exam: Exam) -> bool:
+    return bool(exam.password_required is not False and exam.password_hash)
+
+
+def _verify_exam_password(exam: Exam, password: str | None) -> None:
+    if not _exam_requires_password(exam):
         return
-    if attempt.status != AttemptStatus.IN_PROGRESS:
-        return
-    if not attempt.exam or not attempt.exam.password_hash:
-        return
-
-    access_token = request.headers.get("X-Exam-Access-Token")
-    if not access_token:
-        raise HTTPException(status_code=403, detail="Exam access verification is required")
-
-    try:
-        payload = jwt.decode(
-            access_token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
-        )
-    except JWTError as error:
-        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
-
-    if payload.get("type") != EXAM_ACCESS_TOKEN_TYPE:
-        raise HTTPException(status_code=403, detail="Exam access verification failed")
-
-    try:
-        token_user_id = int(payload.get("sub"))
-        token_attempt_id = int(payload.get("attempt_id"))
-        token_exam_id = int(payload.get("exam_id"))
-    except (TypeError, ValueError) as error:
-        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
-
-    if (
-        token_user_id != current_user.id
-        or token_attempt_id != attempt.id
-        or token_exam_id != attempt.exam_id
-    ):
-        raise HTTPException(status_code=403, detail="Exam access verification failed")
+    if not password or not security.verify_password(password, exam.password_hash):
+        raise HTTPException(status_code=403, detail="Incorrect exam password")
 
 
 def _has_exam_staff_access(exam: Exam | None, current_user: User) -> bool:
@@ -488,33 +444,26 @@ async def start_attempt(
             selectinload(Attempt.exam),
         )
         .filter(Attempt.exam_id == exam_id, Attempt.student_id == current_user.id)
+        .order_by(Attempt.started_at.desc(), Attempt.id.desc())
     )
-    existing_attempt = existing_attempt_result.scalars().unique().first()
+    existing_attempts = existing_attempt_result.scalars().unique().all()
+    existing_attempt = existing_attempts[0] if existing_attempts else None
     if existing_attempt:
         await _sync_attempt_state(db, existing_attempt, now=current_time, commit=True)
         if existing_attempt.status == AttemptStatus.IN_PROGRESS:
-            if not exam.password_hash:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Exam password is not configured. Contact the assigned examiner or an admin.",
-                )
-            if not security.verify_password(start_request.password, exam.password_hash):
-                raise HTTPException(status_code=403, detail="Incorrect exam password")
+            _verify_exam_password(exam, start_request.password)
             existing_attempt.last_opened_at = current_time
             await db.commit()
             existing_attempt = await _get_attempt_or_404(db, existing_attempt.id)
             return {
                 **_serialize_attempt(existing_attempt, current_time),
-                "exam_access_token": _create_exam_access_token(
-                    existing_attempt,
-                    current_user,
-                    now=current_time,
-                ),
+                "exam_access_token": None,
             }
-        return {
-            **_serialize_attempt(existing_attempt, current_time),
-            "exam_access_token": None,
-        }
+        if len(existing_attempts) >= max(exam.max_attempts_per_student or 1, 1):
+            return {
+                **_serialize_attempt(existing_attempt, current_time),
+                "exam_access_token": None,
+            }
 
     assignment_result = await db.execute(
         select(Assignment).filter(
@@ -535,13 +484,7 @@ async def start_attempt(
     if availability_close_time and current_time >= availability_close_time:
         raise HTTPException(status_code=400, detail="Exam availability window has ended")
 
-    if not exam.password_hash:
-        raise HTTPException(
-            status_code=400,
-            detail="Exam password is not configured. Contact the assigned examiner or an admin.",
-        )
-    if not security.verify_password(start_request.password, exam.password_hash):
-        raise HTTPException(status_code=403, detail="Incorrect exam password")
+    _verify_exam_password(exam, start_request.password)
 
     question_result = await db.execute(
         select(ExamQuestion).filter(ExamQuestion.exam_id == exam_id).limit(1)
@@ -562,7 +505,7 @@ async def start_attempt(
     attempt = await _get_attempt_or_404(db, attempt.id)
     return {
         **_serialize_attempt(attempt, current_time),
-        "exam_access_token": _create_exam_access_token(attempt, current_user, now=current_time),
+        "exam_access_token": None,
     }
 
 

@@ -4,7 +4,6 @@ import { debounce, escapeHtml, formatTime, parseApiDate, showToast } from './uti
 
 const urlParams = new URLSearchParams(window.location.search);
 const attemptId = urlParams.get('attempt_id');
-const examAccessStorageKey = attemptId ? `oeps-exam-access:${attemptId}` : null;
 
 let timerInterval: number | null = null;
 let syncInterval: number | null = null;
@@ -18,25 +17,17 @@ const answeredQuestions = new Set<number>();
 let proctor: Proctor | null = null;
 let serverTimeOffsetMs = 0;
 let attemptEndsAtMs: number | null = null;
+let examPaused = false;
+let clipboardToastBlockedUntil = 0;
 
 const LIVE_SYNC_INTERVAL_MS = 6000;
 
-function getExamAccessToken() {
-    return examAccessStorageKey ? sessionStorage.getItem(examAccessStorageKey) : null;
-}
-
 function clearExamAccessToken() {
-    if (examAccessStorageKey) {
-        sessionStorage.removeItem(examAccessStorageKey);
-    }
+    return;
 }
 
 async function examApiFetch<T = unknown>(endpoint: string, options: RequestInit = {}) {
     const headers = new Headers(options.headers);
-    const accessToken = getExamAccessToken();
-    if (accessToken) {
-        headers.set('X-Exam-Access-Token', accessToken);
-    }
     return apiFetch<T>(endpoint, {
         ...options,
         headers,
@@ -80,6 +71,115 @@ function setSaveState(state: 'ready' | 'saving' | 'error', message?: string) {
 
     saveStatus.textContent = message || 'All changes saved';
     connectionStatus.textContent = 'Connected';
+}
+
+function setExamControlsDisabled(disabled: boolean) {
+    document
+        .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('#exam-form input, #exam-form textarea')
+        .forEach((control) => {
+            control.disabled = disabled;
+        });
+
+    const submitButton = document.getElementById('submit-btn') as HTMLButtonElement | null;
+    if (submitButton) {
+        submitButton.disabled = disabled || isSubmitting;
+    }
+}
+
+function setPausedStatusCopy(reason?: string) {
+    const saveStatus = document.getElementById('save-status');
+    const connectionStatus = document.getElementById('connection-status');
+    const connectionDot = document.getElementById('connection-dot');
+
+    if (saveStatus) {
+        saveStatus.className = 'save-status saving';
+        saveStatus.textContent = reason
+            ? `${reason}. Restore camera and fullscreen to continue.`
+            : 'Test paused. Restore camera and fullscreen to continue.';
+    }
+    if (connectionStatus) {
+        connectionStatus.textContent = 'Proctoring pause';
+    }
+    if (connectionDot) {
+        connectionDot.className = 'connection-indicator saving';
+    }
+}
+
+function setExamPaused(paused: boolean, reason?: string) {
+    if (paused) {
+        examPaused = true;
+        document.body.classList.add('exam-paused');
+        clearTimer();
+        clearLiveSync();
+        setExamControlsDisabled(true);
+        setPausedStatusCopy(reason);
+
+        const timer = document.getElementById('timer');
+        if (timer) {
+            timer.textContent = 'Paused';
+            timer.classList.remove('warning', 'danger');
+        }
+        return;
+    }
+
+    examPaused = false;
+    document.body.classList.remove('exam-paused');
+    setExamControlsDisabled(false);
+    setSaveState('ready', 'Proctoring checks restored. Saving is active.');
+
+    if (currentAttempt && examData) {
+        void syncExamState().finally(() => {
+            startTimer();
+            startLiveSync();
+            setExamControlsDisabled(false);
+            setSaveState('ready');
+        });
+    }
+}
+
+function notifyClipboardBlocked() {
+    const now = Date.now();
+    if (now < clipboardToastBlockedUntil) return;
+
+    clipboardToastBlockedUntil = now + 1800;
+    showToast('Copy, cut, paste, drag, and drop are disabled during the exam.', 'warning');
+}
+
+function setupClipboardGuards() {
+    const blockEvent = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        notifyClipboardBlocked();
+    };
+
+    ['copy', 'cut', 'paste', 'drop', 'dragstart'].forEach((eventName) => {
+        document.addEventListener(eventName, blockEvent, true);
+    });
+
+    document.addEventListener(
+        'beforeinput',
+        (event) => {
+            const inputEvent = event as InputEvent;
+            if (inputEvent.inputType === 'insertFromPaste' || inputEvent.inputType === 'insertFromDrop') {
+                blockEvent(event);
+            }
+        },
+        true,
+    );
+
+    document.addEventListener(
+        'keydown',
+        (event) => {
+            const key = event.key.toLowerCase();
+            const isClipboardShortcut =
+                (event.ctrlKey || event.metaKey) && ['c', 'v', 'x'].includes(key);
+            const isPasteShortcut = event.shiftKey && event.key === 'Insert';
+            if (!isClipboardShortcut && !isPasteShortcut) return;
+
+            blockEvent(event);
+        },
+        true,
+    );
 }
 
 function getAuthoritativeNow() {
@@ -299,6 +399,7 @@ function renderExam(exam: any, responseMap = new Map<number, string>()) {
     attachQuestionListeners();
     restoreResponses(responseMap);
     updateProgress();
+    setExamControlsDisabled(examPaused);
 }
 
 function markQuestionAnswered(questionId: number) {
@@ -324,6 +425,7 @@ function updateProgress() {
 
 async function handleAnswerChange(questionId: number, answer: string) {
     if (!attemptId) return;
+    if (examPaused) return;
 
     setSaveState('saving');
 
@@ -402,6 +504,8 @@ async function syncExamState() {
         ]);
 
         if (latestAttempt.status !== 'IN_PROGRESS') {
+            proctor?.destroy();
+            proctor = null;
             clearExamAccessToken();
             window.location.href = `/result.html?attempt_id=${attemptId}`;
             return;
@@ -496,12 +600,6 @@ async function initExam() {
         return;
     }
 
-    if (!getExamAccessToken()) {
-        showToast('Open the exam from the dashboard and enter the password to continue.', 'warning');
-        redirectToDashboard(1200);
-        return;
-    }
-
     try {
         currentAttempt = await examApiFetch<any>(`/attempts/${attemptId}`);
         examData = await examApiFetch<any>(`/exams/${currentAttempt.exam_id}`);
@@ -519,7 +617,10 @@ async function initExam() {
         startTimer();
         startLiveSync();
         setLiveUpdateStatus('Question changes sync automatically during the attempt.');
-        proctor = new Proctor(Number.parseInt(attemptId, 10), getExamAccessToken() || '');
+        proctor = new Proctor(Number.parseInt(attemptId, 10), {
+            onPause: (reason) => setExamPaused(true, reason),
+            onResume: () => setExamPaused(false),
+        });
         setSaveState('ready');
     } catch (error: any) {
         if (error?.message?.includes?.('Exam access')) {
@@ -548,6 +649,10 @@ document.getElementById('submit-btn')?.addEventListener('click', (event) => {
 
 async function submitExam(auto = false) {
     if (!attemptId || isSubmitting) return;
+    if (examPaused && !auto) {
+        showToast('Restore camera and fullscreen before submitting.', 'warning');
+        return;
+    }
 
     isSubmitting = true;
     clearTimer();
@@ -584,4 +689,5 @@ async function submitExam(auto = false) {
     }
 }
 
+setupClipboardGuards();
 void initExam();

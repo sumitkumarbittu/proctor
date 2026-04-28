@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base
@@ -28,6 +28,8 @@ class Exam(Base):
     status = Column(Enum(ExamStatus), default=ExamStatus.DRAFT)
     start_time = Column(DateTime, nullable=True)
     duration_minutes = Column(Integer, nullable=False)
+    max_attempts_per_student = Column(Integer, nullable=False, default=1)
+    password_required = Column(Boolean, nullable=False, default=True)
     password_hash = Column(String, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"))
     schedule_updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)

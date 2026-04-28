@@ -1,16 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, List
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from jose import JWTError, jwt
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api import deps
 from app.core import security
-from app.core.config import settings
 from app.models.attempt import Attempt, AttemptStatus, Response
 from app.models.exam import (
     Assignment,
@@ -40,7 +38,6 @@ from app.schemas.exam import (
 router = APIRouter()
 
 DEFAULT_FOLDER_NAME = "My Questions"
-EXAM_ACCESS_TOKEN_TYPE = "exam_access"
 EXAM_PASSWORD_MIN_LENGTH = 6
 
 
@@ -52,6 +49,12 @@ def _normalize_duration_minutes(duration_minutes: int) -> int:
     if duration_minutes < 1:
         raise HTTPException(status_code=400, detail="Duration must be at least 1 minute")
     return duration_minutes
+
+
+def _normalize_max_attempts(max_attempts: int) -> int:
+    if max_attempts < 1:
+        raise HTTPException(status_code=400, detail="Attempts allowed must be at least 1")
+    return max_attempts
 
 
 def _normalize_exam_title(title: str | None) -> str:
@@ -201,6 +204,8 @@ def _snapshot_exam(exam: Exam) -> dict[str, Any]:
             "status": sorted_exam.status,
             "start_time": sorted_exam.start_time,
             "duration_minutes": sorted_exam.duration_minutes,
+            "max_attempts_per_student": sorted_exam.max_attempts_per_student,
+            "password_required": sorted_exam.password_required,
             "password_hash": sorted_exam.password_hash,
             "created_by": sorted_exam.created_by,
             "created_at": sorted_exam.created_at,
@@ -277,8 +282,19 @@ def _serialize_exam(exam: Exam, current_user: User) -> dict[str, Any]:
     include_management = current_user.role in [UserRole.ADMIN, UserRole.EXAMINER]
     sorted_exam = _sort_exam_questions(exam)
     can_manage_schedule = _has_exam_schedule_access(sorted_exam, current_user) if include_management else False
+    attempts = list(sorted_exam.attempts or [])
+    student_attempts = [
+        attempt for attempt in attempts if attempt.student_id == current_user.id
+    ]
+    student_attempts.sort(
+        key=lambda attempt: (attempt.started_at or datetime.min, attempt.id or 0),
+        reverse=True,
+    )
+    student_attempt = student_attempts[0] if student_attempts else None
+    visible_attempts = attempts if include_management else student_attempts
+    password_required = sorted_exam.password_required is not False
     show_student_questions = current_user.role != UserRole.STUDENT or any(
-        attempt.student_id == current_user.id for attempt in sorted_exam.attempts
+        attempt.student_id == current_user.id for attempt in attempts
     )
 
     return {
@@ -286,13 +302,30 @@ def _serialize_exam(exam: Exam, current_user: User) -> dict[str, Any]:
         "title": sorted_exam.title,
         "instructions": sorted_exam.instructions,
         "duration_minutes": sorted_exam.duration_minutes,
+        "max_attempts_per_student": sorted_exam.max_attempts_per_student or 1,
+        "password_required": password_required,
         "start_time": sorted_exam.start_time,
         "status": sorted_exam.status,
-        "requires_password": bool(sorted_exam.password_hash),
+        "requires_password": bool(password_required and sorted_exam.password_hash),
         "can_manage_schedule": can_manage_schedule,
         "can_manage_timer": can_manage_schedule,
         "can_manage_password": can_manage_schedule,
         "question_count": len(sorted_exam.questions),
+        "attempt_count": len(visible_attempts),
+        "in_progress_attempt_count": sum(
+            1 for attempt in visible_attempts if attempt.status == AttemptStatus.IN_PROGRESS
+        ),
+        "submitted_attempt_count": sum(
+            1 for attempt in visible_attempts if attempt.status == AttemptStatus.SUBMITTED
+        ),
+        "evaluated_attempt_count": sum(
+            1 for attempt in visible_attempts if attempt.status == AttemptStatus.EVALUATED
+        ),
+        "student_attempt_count": len(student_attempts),
+        "student_attempt_id": student_attempt.id if student_attempt else None,
+        "student_attempt_status": student_attempt.status.value if student_attempt else None,
+        "student_attempt_started_at": student_attempt.started_at if student_attempt else None,
+        "student_attempt_submitted_at": student_attempt.submitted_at if student_attempt else None,
         "schedule_updated_at": sorted_exam.schedule_updated_at if include_management else None,
         "schedule_updated_by": sorted_exam.schedule_updated_by if include_management else None,
         "created_by": sorted_exam.created_by,
@@ -409,44 +442,6 @@ def _ensure_question_owner_access(question: Question, current_user: User) -> Non
     if question.folder and _folder_is_accessible(question.folder, current_user):
         return
     raise HTTPException(status_code=403, detail="Question is not editable by this user")
-
-
-def _validate_exam_access_token(
-    request: Request,
-    *,
-    current_user: User,
-    exam_id: int,
-    attempt_id: int,
-) -> None:
-    access_token = request.headers.get("X-Exam-Access-Token")
-    if not access_token:
-        raise HTTPException(status_code=403, detail="Exam access verification is required")
-
-    try:
-        payload = jwt.decode(
-            access_token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
-        )
-    except JWTError as error:
-        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
-
-    if payload.get("type") != EXAM_ACCESS_TOKEN_TYPE:
-        raise HTTPException(status_code=403, detail="Exam access verification failed")
-
-    try:
-        token_user_id = int(payload.get("sub"))
-        token_attempt_id = int(payload.get("attempt_id"))
-        token_exam_id = int(payload.get("exam_id"))
-    except (TypeError, ValueError) as error:
-        raise HTTPException(status_code=403, detail="Exam access verification failed") from error
-
-    if (
-        token_user_id != current_user.id
-        or token_attempt_id != attempt_id
-        or token_exam_id != exam_id
-    ):
-        raise HTTPException(status_code=403, detail="Exam access verification failed")
 
 
 async def _get_exam_or_404(db: AsyncSession, exam_id: int) -> Exam:
@@ -856,13 +851,19 @@ async def create_exam(
     exam_in: ExamCreate,
     current_user: User = Depends(deps.get_current_active_examiner),
 ) -> Any:
-    normalized_password = _normalize_exam_password(exam_in.password)
+    password_hash = (
+        security.get_password_hash(_normalize_exam_password(exam_in.password))
+        if exam_in.password_required
+        else None
+    )
     exam = Exam(
         title=_normalize_exam_title(exam_in.title),
         instructions=(exam_in.instructions or "").strip() or None,
         start_time=_normalize_schedule_datetime(exam_in.start_time),
         duration_minutes=_normalize_duration_minutes(exam_in.duration_minutes),
-        password_hash=security.get_password_hash(normalized_password),
+        max_attempts_per_student=_normalize_max_attempts(exam_in.max_attempts_per_student),
+        password_required=exam_in.password_required,
+        password_hash=password_hash,
         status=exam_in.status,
         created_by=current_user.id,
         schedule_updated_by=current_user.id,
@@ -936,7 +937,6 @@ async def read_exams(
 @router.get("/{exam_id}", response_model=ExamSchema)
 async def read_exam(
     exam_id: int,
-    request: Request,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
@@ -966,14 +966,6 @@ async def read_exam(
                 status_code=403,
                 detail="Start the exam from the dashboard before opening exam content",
             )
-        if student_attempt and student_attempt.status == AttemptStatus.IN_PROGRESS and exam.password_hash:
-            _validate_exam_access_token(
-                request,
-                current_user=current_user,
-                exam_id=exam.id,
-                attempt_id=student_attempt.id,
-            )
-
     return _serialize_exam(exam, current_user)
 
 
@@ -990,8 +982,10 @@ async def update_exam(
         field_name in fields_set
         for field_name in [
             "duration_minutes",
+            "max_attempts_per_student",
             "start_time",
             "status",
+            "password_required",
             "password",
         ]
     )
@@ -1007,12 +1001,22 @@ async def update_exam(
         exam.instructions = (exam_in.instructions or "").strip() or None
     if "duration_minutes" in fields_set and exam_in.duration_minutes is not None:
         exam.duration_minutes = _normalize_duration_minutes(exam_in.duration_minutes)
+    if "max_attempts_per_student" in fields_set and exam_in.max_attempts_per_student is not None:
+        exam.max_attempts_per_student = _normalize_max_attempts(exam_in.max_attempts_per_student)
     if "start_time" in fields_set:
         exam.start_time = _normalize_schedule_datetime(exam_in.start_time)
     if "status" in fields_set and exam_in.status is not None:
         exam.status = exam_in.status
+    if "password_required" in fields_set and exam_in.password_required is not None:
+        exam.password_required = exam_in.password_required
+        if not exam.password_required:
+            exam.password_hash = None
     if "password" in fields_set and exam_in.password is not None:
+        if not exam.password_required:
+            raise HTTPException(status_code=400, detail="Enable password protection before setting a password")
         exam.password_hash = security.get_password_hash(_normalize_exam_password(exam_in.password))
+    if exam.password_required and not exam.password_hash:
+        raise HTTPException(status_code=400, detail="Exam password is required when password protection is enabled")
 
     if schedule_fields_changed:
         _mark_schedule_update(exam, current_user)

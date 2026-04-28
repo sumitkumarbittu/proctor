@@ -12,10 +12,10 @@
         /* SF Symbols fallback using Unicode / emoji-compatible symbols */
         .sf { font-style: normal; font-size: 1.1em; line-height: 1; }
     </style>
-  <script type="module" crossorigin src="/assets/dashboard-B4dLF9In.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/utils-DYakDHdb.js">
-  <link rel="modulepreload" crossorigin href="/assets/api-C7FO9LhO.js">
-  <link rel="stylesheet" crossorigin href="/assets/utils-BPN50kxQ.css">
+  <script type="module" crossorigin src="/assets/dashboard-CClRTBmX.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-DKSetIlA.js">
+  <link rel="modulepreload" crossorigin href="/assets/api-CNE7ZS8Q.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-CAidHwzd.css">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -257,7 +257,7 @@
                 <h3 class="modal-title" id="exam-modal-title">Create Exam</h3>
                 <button class="modal-close" data-close-modal="exam-modal" aria-label="Close exam modal">×</button>
             </div>
-            <form id="exam-form">
+            <form id="exam-form" autocomplete="off">
                 <div class="input-group">
                     <label class="label" for="exam-title">Title</label>
                     <input type="text" id="exam-title" class="input" required placeholder="Midterm examination">
@@ -270,6 +270,10 @@
                     <div class="input-group w-full">
                         <label class="label" for="exam-duration">Duration (minutes)</label>
                         <input type="number" id="exam-duration" class="input" required min="1" value="60">
+                    </div>
+                    <div class="input-group w-full">
+                        <label class="label" for="exam-attempt-limit">Attempts / student</label>
+                        <input type="number" id="exam-attempt-limit" class="input" required min="1" value="1">
                     </div>
                     <div class="input-group w-full">
                         <label class="label" for="exam-start-time">Start time</label>
@@ -286,8 +290,15 @@
                     </div>
                 </div>
                 <div class="input-group">
+                    <label class="assignment-option" style="margin-bottom:0.75rem;">
+                        <input type="checkbox" id="exam-password-required" checked>
+                        <div>
+                            <strong>Use exam password</strong>
+                            <p class="helper-text">Require students to enter a password before opening the exam.</p>
+                        </div>
+                    </label>
                     <label class="label" for="exam-password">Exam password</label>
-                    <input type="password" id="exam-password" class="input" minlength="6" placeholder="Enter exam password">
+                    <input type="password" id="exam-password" name="exam-security-code" class="input" minlength="6" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="Enter exam password">
                     <p class="helper-text mt-1" id="exam-password-help">Students must enter this password before they can open the exam.</p>
                 </div>
                 <div class="modal-footer">
@@ -304,13 +315,13 @@
                 <h3 class="modal-title" id="exam-start-modal-title">Open Exam</h3>
                 <button class="modal-close" data-close-modal="exam-start-modal" aria-label="Close exam start modal">×</button>
             </div>
-            <form id="exam-start-form">
+            <form id="exam-start-form" autocomplete="off">
                 <p class="helper-text mb-2" id="exam-start-modal-copy">
                     Enter the exam password to start or resume your attempt.
                 </p>
-                <div class="input-group">
+                <div class="input-group" id="exam-start-password-group">
                     <label class="label" for="exam-start-password">Exam password</label>
-                    <input type="password" id="exam-start-password" class="input" required minlength="6" autocomplete="current-password" placeholder="Enter exam password">
+                    <input type="password" id="exam-start-password" name="exam-access-code" class="input" required minlength="6" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" placeholder="Enter exam password">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" data-close-modal="exam-start-modal">Cancel</button>

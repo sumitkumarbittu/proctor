@@ -126,18 +126,22 @@ class ExamBase(BaseModel):
     title: str
     instructions: Optional[str] = None
     duration_minutes: int
+    max_attempts_per_student: int = 1
+    password_required: bool = True
     start_time: Optional[datetime] = None
     status: ExamStatus = ExamStatus.DRAFT
 
 
 class ExamCreate(ExamBase):
-    password: str
+    password: Optional[str] = None
 
 
 class ExamUpdate(BaseModel):
     title: Optional[str] = None
     instructions: Optional[str] = None
     duration_minutes: Optional[int] = None
+    max_attempts_per_student: Optional[int] = None
+    password_required: Optional[bool] = None
     start_time: Optional[datetime] = None
     status: Optional[ExamStatus] = None
     password: Optional[str] = None
@@ -148,6 +152,8 @@ class Exam(BaseModel):
     title: str
     instructions: Optional[str] = None
     duration_minutes: int
+    max_attempts_per_student: int = 1
+    password_required: bool = True
     start_time: Optional[datetime] = None
     status: ExamStatus
     requires_password: bool = False
@@ -155,6 +161,15 @@ class Exam(BaseModel):
     can_manage_timer: bool = False
     can_manage_password: bool = False
     question_count: int = 0
+    attempt_count: int = 0
+    in_progress_attempt_count: int = 0
+    submitted_attempt_count: int = 0
+    evaluated_attempt_count: int = 0
+    student_attempt_count: int = 0
+    student_attempt_id: Optional[int] = None
+    student_attempt_status: Optional[str] = None
+    student_attempt_started_at: Optional[datetime] = None
+    student_attempt_submitted_at: Optional[datetime] = None
     schedule_updated_at: Optional[datetime] = None
     schedule_updated_by: Optional[int] = None
     created_by: int

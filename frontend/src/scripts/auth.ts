@@ -1,4 +1,4 @@
-import { buildApiUrl, setAuthToken } from './utils';
+import { buildApiUrl } from './utils';
 
 const loginForm = document.getElementById('loginForm') as HTMLFormElement | null;
 const errorMessage = document.getElementById('error-message');
@@ -32,6 +32,7 @@ if (loginForm) {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
+                credentials: 'include',
                 body: formData,
             });
 
@@ -40,8 +41,7 @@ if (loginForm) {
                 throw new Error(error.detail || 'Invalid credentials.');
             }
 
-            const data = await response.json();
-            setAuthToken(data.access_token);
+            await response.json().catch(() => null);
 
             loginSpinner?.classList.add('hidden');
             loginButton?.classList.remove('btn-primary');

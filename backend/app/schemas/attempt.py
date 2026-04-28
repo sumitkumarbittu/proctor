@@ -16,7 +16,7 @@ class AttemptCreate(AttemptBase):
 
 
 class AttemptStartRequest(BaseModel):
-    password: str
+    password: Optional[str] = None
 
 class AttemptUpdate(BaseModel):
     responses: List[ResponseCreate]

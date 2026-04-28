@@ -18,8 +18,19 @@
                     <p id="live-update-status" class="helper-text">Question changes sync automatically during the attempt.</p>
                 </div>
                 <div class="flex flex-col gap-sm items-center">
+                    <button id="camera-toggle-btn" type="button" class="btn btn-ghost btn-sm camera-toggle" aria-pressed="false">
+                        Enable camera
+                    </button>
                     <span class="badge badge-info" id="question-count">— Questions</span>
                     <p class="helper-text">Answers save automatically while you work.</p>
+                </div>
+            </div>
+
+            <div id="camera-preview-panel" class="camera-preview-panel" hidden>
+                <video id="camera-preview" class="camera-preview" autoplay muted playsinline></video>
+                <div>
+                    <span class="section-title">Live camera preview</span>
+                    <p class="helper-text">Keep your face visible while the attempt is active.</p>
                 </div>
             </div>
 

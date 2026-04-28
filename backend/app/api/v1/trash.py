@@ -240,6 +240,8 @@ async def _restore_exam(
         status=_enum_or_default(ExamStatus, snapshot.get("status"), ExamStatus.DRAFT),
         start_time=_parse_datetime(snapshot.get("start_time")),
         duration_minutes=int(snapshot.get("duration_minutes") or 60),
+        max_attempts_per_student=int(snapshot.get("max_attempts_per_student") or 1),
+        password_required=bool(snapshot.get("password_required", bool(snapshot.get("password_hash")))),
         password_hash=snapshot.get("password_hash"),
         created_by=int(created_by) if created_by is not None else current_user.id,
         schedule_updated_by=int(schedule_updated_by) if schedule_updated_by is not None else None,

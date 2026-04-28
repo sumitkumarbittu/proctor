@@ -25,9 +25,7 @@ let selectedQuestionFolderId: number | null = null;
 let userSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let questionSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let trashSearchTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingExamStart: { examId: number; title: string } | null = null;
-
-const EXAM_ACCESS_STORAGE_PREFIX = 'oeps-exam-access:';
+let pendingExamStart: { examId: number; title: string; requiresPassword: boolean } | null = null;
 
 // ── SVG icon snippets used throughout ─────────────────────────────────────────
 const ICON = {
@@ -85,18 +83,40 @@ function getEditableQuestionFolders() {
     return questionFolders.filter((folder) => folder.can_edit);
 }
 
-function getExamAccessStorageKey(attemptId: number) {
-    return `${EXAM_ACCESS_STORAGE_PREFIX}${attemptId}`;
-}
-
-function storeExamAccessToken(attemptId: number, token: string) {
-    sessionStorage.setItem(getExamAccessStorageKey(attemptId), token);
-}
-
 function formatRemainingTime(remainingSeconds?: number, status?: string) {
     if (status !== 'IN_PROGRESS') return '—';
     if (typeof remainingSeconds !== 'number') return '—';
     return formatTime(remainingSeconds);
+}
+
+function getExamQuestionCount(exam: any) {
+    return exam.question_count || exam.questions?.length || 0;
+}
+
+function getStudentAttemptCount(exam: any) {
+    return exam.student_attempt_count || 0;
+}
+
+function getStudentAttemptStatus(exam: any) {
+    return exam.student_attempt_status || '';
+}
+
+function getStudentActionLabel(exam: any) {
+    const attemptsUsed = getStudentAttemptCount(exam);
+    const attemptsAllowed = exam.max_attempts_per_student || 1;
+    if (!attemptsUsed) return 'Start exam';
+    if (getStudentAttemptStatus(exam) === 'IN_PROGRESS') return 'Resume exam';
+    return attemptsUsed >= attemptsAllowed ? 'View Detail' : 'Start next attempt';
+}
+
+function getStaffExamHealthCopy(exam: any) {
+    const attempts = exam.attempt_count || 0;
+    const pending = exam.submitted_attempt_count || 0;
+    const active = exam.in_progress_attempt_count || 0;
+    const evaluated = exam.evaluated_attempt_count || 0;
+
+    if (!attempts) return 'No attempts yet';
+    return `${active} active • ${pending} pending review • ${evaluated} evaluated`;
 }
 
 function getFolderAccessCopy(folder: any) {
@@ -285,6 +305,7 @@ function setupModals() {
         ?.addEventListener('click', () => void openQuestionModal());
     document.getElementById('create-folder-btn')?.addEventListener('click', () => void openFolderModal());
     document.getElementById('exam-form')?.addEventListener('submit', handleExamSubmit);
+    document.getElementById('exam-password-required')?.addEventListener('change', syncExamPasswordControls);
     document.getElementById('exam-start-form')?.addEventListener('submit', handleExamStartSubmit);
     document.getElementById('user-form')?.addEventListener('submit', handleUserSubmit);
     document.getElementById('question-form')?.addEventListener('submit', handleQuestionSubmit);
@@ -325,7 +346,8 @@ function setupModals() {
 }
 
 async function initDashboard() {
-    document.getElementById('logout-btn')?.addEventListener('click', () => {
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+        await apiFetch('/auth/logout', { method: 'POST' }).catch(() => null);
         removeAuthToken();
         window.location.href = '/';
     });
@@ -378,21 +400,25 @@ async function loadAdminStats(silent = false) {
                 <div class="stat-card-icon">${ICON.statExams}</div>
                 <div class="stat-card-value">${overview.total_exams}</div>
                 <div class="stat-card-label">Visible Exams</div>
+                <div class="stat-card-note">${overview.draft_exams || 0} drafts • ${overview.closed_exams || 0} closed</div>
             </div>
             <div class="stat-card green animate-in" style="animation-delay: 40ms;">
                 <div class="stat-card-icon">${ICON.statLive}</div>
                 <div class="stat-card-value">${overview.live_exams}</div>
                 <div class="stat-card-label">Live Exams</div>
+                <div class="stat-card-note">${overview.active_attempts || 0} active attempts right now</div>
             </div>
             <div class="stat-card amber animate-in" style="animation-delay: 80ms;">
                 <div class="stat-card-icon">${ICON.statAttempts}</div>
                 <div class="stat-card-value">${overview.total_attempts}</div>
                 <div class="stat-card-label">Attempts</div>
+                <div class="stat-card-note">${formatPercent(overview.participation_rate)} participation</div>
             </div>
             <div class="stat-card rose animate-in" style="animation-delay: 120ms;">
                 <div class="stat-card-icon">${ICON.statReview}</div>
                 <div class="stat-card-value">${overview.pending_evaluation}</div>
                 <div class="stat-card-label">Pending Review</div>
+                <div class="stat-card-note">${overview.integrity_alerts || 0} integrity alerts</div>
             </div>
         `;
     } catch (error: any) {
@@ -423,44 +449,82 @@ async function loadExams(silent = false) {
 
         exams.forEach((exam, index) => {
             const card = document.createElement('div');
-            card.className = 'card card-interactive exam-card animate-in';
+            card.className = `card card-interactive exam-card ${
+                isStaffUser() ? 'staff-exam-card' : 'student-exam-card'
+            } animate-in`;
             card.style.animationDelay = `${index * 45}ms`;
             const scheduleMeta = exam.start_time
                 ? `Starts ${formatDateTimeIst(exam.start_time)}`
                 : 'No fixed start time';
-            const passwordMeta = exam.requires_password ? 'Password protected' : 'Password required';
-
-            const staffMeta = isStaffUser()
-                ? `
-                    <span>${exam.teacher_assignments?.length || 0} teachers</span>
-                    <span>${exam.assignments?.length || 0} students</span>
-                `
-                : '';
+            const passwordMeta = exam.password_required
+                ? exam.requires_password
+                    ? 'Password protected'
+                    : 'Password setup needed'
+                : 'No password';
+            const questionCount = getExamQuestionCount(exam);
+            const studentAttemptCount = getStudentAttemptCount(exam);
+            const studentAttemptStatus = getStudentAttemptStatus(exam);
+            const attemptsAllowed = exam.max_attempts_per_student || 1;
 
             card.innerHTML = `
                 <div class="exam-card-header">
                     <div>
                         <h3>${escapeHtml(exam.title)}</h3>
-                        <p class="helper-text">${escapeHtml(exam.instructions || 'No instructions added yet.')}</p>
+                        ${
+                            isStaffUser()
+                                ? `<p class="helper-text">${escapeHtml(exam.instructions || 'No instructions added yet.')}</p>`
+                                : ''
+                        }
                     </div>
                     <span class="badge ${getStatusBadgeClass(exam.status)}">${escapeHtml(exam.status)}</span>
-                </div>
-                <div class="exam-card-meta">
-                    <span>${exam.duration_minutes} min</span>
-                    <span>${exam.question_count || exam.questions?.length || 0} questions</span>
-                    ${staffMeta}
-                </div>
-                <div class="helper-text">
-                    ${escapeHtml(scheduleMeta)} • ${escapeHtml(passwordMeta)}
                 </div>
                 ${
                     isStaffUser()
                         ? `
+                            <div class="exam-card-meta">
+                                <span>${exam.duration_minutes} min</span>
+                                <span>${exam.max_attempts_per_student || 1} attempt${(exam.max_attempts_per_student || 1) === 1 ? '' : 's'}</span>
+                                <span>${questionCount} questions</span>
+                                <span>${exam.teacher_assignments?.length || 0} teachers</span>
+                                <span>${exam.assignments?.length || 0} students</span>
+                            </div>
+                            <div class="exam-detail-grid">
+                                <div>
+                                    <span>Schedule</span>
+                                    <strong>${escapeHtml(scheduleMeta)}</strong>
+                                </div>
+                                <div>
+                                    <span>Attempts</span>
+                                    <strong>${exam.attempt_count || 0}</strong>
+                                </div>
+                                <div>
+                                    <span>Review</span>
+                                    <strong>${exam.submitted_attempt_count || 0} pending</strong>
+                                </div>
+                                <div>
+                                    <span>Security</span>
+                                    <strong>${escapeHtml(passwordMeta)}</strong>
+                                </div>
+                            </div>
                             <div class="helper-text">
-                                Created by ${escapeHtml(exam.creator?.name || exam.creator?.email || 'Team')}
+                                ${escapeHtml(getStaffExamHealthCopy(exam))} • Created by ${escapeHtml(
+                                    exam.creator?.name || exam.creator?.email || 'Team',
+                                )}
                             </div>
                         `
-                        : ''
+                        : `
+                            <div class="student-exam-summary">
+                                <div>
+                                    <span>No. of questions</span>
+                                    <strong>${questionCount}</strong>
+                                </div>
+                                <div>
+                                    <span>Attempt</span>
+                                    <strong>${studentAttemptCount}/${attemptsAllowed}</strong>
+                                    <small>${studentAttemptStatus ? escapeHtml(studentAttemptStatus) : 'Not started'}</small>
+                                </div>
+                            </div>
+                        `
                 }
                 <div class="exam-card-actions">
                     ${
@@ -478,8 +542,17 @@ async function loadExams(silent = false) {
                             `
                             : '<div class="helper-text">Assigned exam</div>'
                     }
-                    <button class="btn btn-primary btn-sm start-btn" data-id="${exam.id}" data-title="${escapeHtml(exam.title)}">
-                        ${currentUser.role === 'student' ? 'Start exam' : 'View details'}
+                    <button
+                        class="btn btn-primary btn-sm start-btn"
+                        data-id="${exam.id}"
+                        data-title="${escapeHtml(exam.title)}"
+                        data-requires-password="${exam.requires_password ? 'true' : 'false'}"
+                        data-attempt-id="${exam.student_attempt_id || ''}"
+                        data-attempt-status="${studentAttemptStatus}"
+                        data-attempt-count="${studentAttemptCount}"
+                        data-attempt-max="${attemptsAllowed}"
+                    >
+                        ${currentUser.role === 'student' ? getStudentActionLabel(exam) : 'View details'}
                     </button>
                 </div>
             `;
@@ -508,9 +581,20 @@ function attachExamListeners() {
             if (!id) return;
 
             if (currentUser.role === 'student') {
+                const studentAttemptId = button.dataset.attemptId;
+                const studentAttemptStatus = button.dataset.attemptStatus;
+                const attemptCount = Number.parseInt(button.dataset.attemptCount || '0', 10);
+                const attemptMax = Number.parseInt(button.dataset.attemptMax || '1', 10);
+
+                if (studentAttemptId && studentAttemptStatus !== 'IN_PROGRESS' && attemptCount >= attemptMax) {
+                    window.location.href = `/result.html?attempt_id=${studentAttemptId}`;
+                    return;
+                }
+
                 openExamStartModal({
                     id: Number.parseInt(id, 10),
                     title: button.dataset.title || 'this exam',
+                    requiresPassword: button.dataset.requiresPassword === 'true',
                 });
                 return;
             }
@@ -557,22 +641,31 @@ function attachExamListeners() {
     });
 }
 
-function openExamStartModal(exam: { id: number; title: string }) {
-    pendingExamStart = { examId: exam.id, title: exam.title };
+function openExamStartModal(exam: { id: number; title: string; requiresPassword: boolean }) {
+    pendingExamStart = {
+        examId: exam.id,
+        title: exam.title,
+        requiresPassword: exam.requiresPassword,
+    };
 
     const title = document.getElementById('exam-start-modal-title');
     const prompt = document.getElementById('exam-start-modal-copy');
     const passwordInput = document.getElementById('exam-start-password') as HTMLInputElement | null;
+    const passwordGroup = document.getElementById('exam-start-password-group');
 
     if (title) title.textContent = `Open ${exam.title}`;
     if (prompt) {
-        prompt.textContent =
-            'Enter the exam password to start or resume your attempt. The password itself is only verified on the server.';
+        prompt.textContent = exam.requiresPassword
+            ? 'Enter the exam password to start or resume your attempt.'
+            : 'This exam does not require a password. Continue to open your attempt.';
     }
     if (passwordInput) {
         passwordInput.value = '';
-        passwordInput.focus();
+        passwordInput.required = exam.requiresPassword;
+        passwordInput.disabled = !exam.requiresPassword;
+        if (exam.requiresPassword) passwordInput.focus();
     }
+    passwordGroup?.classList.toggle('hidden', !exam.requiresPassword);
 
     openModal('exam-start-modal');
 }
@@ -587,7 +680,7 @@ async function handleExamStartSubmit(event: Event) {
 
     const passwordInput = document.getElementById('exam-start-password') as HTMLInputElement | null;
     const password = passwordInput?.value || '';
-    if (!password.trim()) {
+    if (pendingExamStart.requiresPassword && !password.trim()) {
         showToast('Enter the exam password to continue.', 'warning');
         passwordInput?.focus();
         return;
@@ -602,10 +695,6 @@ async function handleExamStartSubmit(event: Event) {
         closeModal('exam-start-modal');
 
         if (attempt.status === 'IN_PROGRESS') {
-            if (!attempt.exam_access_token) {
-                throw new Error('Exam access could not be established. Please try again.');
-            }
-            storeExamAccessToken(attempt.id, attempt.exam_access_token);
             window.location.href = `/exam.html?attempt_id=${attempt.id}`;
             return;
         }
@@ -626,8 +715,10 @@ function openExamModal(exam?: any) {
     const examTitle = document.getElementById('exam-title') as HTMLInputElement | null;
     const instructions = document.getElementById('exam-instructions') as HTMLTextAreaElement | null;
     const duration = document.getElementById('exam-duration') as HTMLInputElement | null;
+    const attemptLimit = document.getElementById('exam-attempt-limit') as HTMLInputElement | null;
     const startTime = document.getElementById('exam-start-time') as HTMLInputElement | null;
     const status = document.getElementById('exam-status') as HTMLSelectElement | null;
+    const passwordRequired = document.getElementById('exam-password-required') as HTMLInputElement | null;
     const password = document.getElementById('exam-password') as HTMLInputElement | null;
     const passwordHelp = document.getElementById('exam-password-help');
 
@@ -636,22 +727,41 @@ function openExamModal(exam?: any) {
     if (examTitle) examTitle.value = exam?.title || '';
     if (instructions) instructions.value = exam?.instructions || '';
     if (duration) duration.value = exam?.duration_minutes?.toString() || '60';
+    if (attemptLimit) attemptLimit.value = exam?.max_attempts_per_student?.toString() || '1';
     if (startTime) startTime.value = toDateTimeLocalIstValue(exam?.start_time);
     if (status) status.value = exam?.status || 'DRAFT';
+    if (passwordRequired) passwordRequired.checked = exam ? Boolean(exam?.password_required) : true;
     if (password) {
         password.value = '';
-        password.required = !exam || !exam?.requires_password;
         password.placeholder = exam ? 'Leave blank to keep the current exam password' : 'Enter exam password';
     }
     if (passwordHelp) {
         passwordHelp.textContent = exam
-            ? exam?.requires_password
+            ? exam?.password_required
                 ? 'Only the assigned examiner or an admin can change the exam password. Leave this blank to keep the current password.'
-                : 'This exam does not have a password yet. Set one now so students can open it securely.'
+                : 'Password protection is turned off for this exam.'
             : 'Students must enter this password before they can open the exam.';
     }
+    syncExamPasswordControls();
 
     openModal('exam-modal');
+}
+
+function syncExamPasswordControls() {
+    const passwordRequired = document.getElementById('exam-password-required') as HTMLInputElement | null;
+    const password = document.getElementById('exam-password') as HTMLInputElement | null;
+    const passwordHelp = document.getElementById('exam-password-help');
+    const required = passwordRequired?.checked ?? true;
+
+    if (password) {
+        password.disabled = !required;
+        password.required = required && !editingExamId;
+    }
+    if (passwordHelp && !required) {
+        passwordHelp.textContent = 'Password protection is turned off for this exam.';
+    } else if (passwordHelp && required && !editingExamId) {
+        passwordHelp.textContent = 'Students must enter this password before they can open the exam.';
+    }
 }
 
 async function handleExamSubmit(event: Event) {
@@ -664,6 +774,11 @@ async function handleExamSubmit(event: Event) {
             (document.getElementById('exam-duration') as HTMLInputElement).value,
             10,
         ),
+        max_attempts_per_student: Number.parseInt(
+            (document.getElementById('exam-attempt-limit') as HTMLInputElement).value,
+            10,
+        ),
+        password_required: (document.getElementById('exam-password-required') as HTMLInputElement).checked,
         start_time: fromDateTimeLocalIstValue(
             (document.getElementById('exam-start-time') as HTMLInputElement).value,
         ),
@@ -671,11 +786,11 @@ async function handleExamSubmit(event: Event) {
     };
     const password = (document.getElementById('exam-password') as HTMLInputElement).value.trim();
 
-    if (!editingExamId && !password) {
+    if (body.password_required && !editingExamId && !password) {
         showToast('Exam password is required before students can start the exam.', 'warning');
         return;
     }
-    if (password) {
+    if (body.password_required && password) {
         (body as Record<string, unknown>).password = password;
     }
 

@@ -1,4 +1,4 @@
-import { buildApiUrl, getAuthToken } from './utils';
+import { buildApiUrl } from './utils';
 
 function shouldSetJsonContentType(body: BodyInit | null | undefined): boolean {
     return !!body && !(body instanceof FormData);
@@ -8,15 +8,10 @@ export async function apiFetch<T = unknown>(
     endpoint: string,
     options: RequestInit = {},
 ): Promise<T> {
-    const token = getAuthToken();
     const headers = new Headers(options.headers);
 
     if (shouldSetJsonContentType(options.body) && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
-    }
-
-    if (token && !headers.has('Authorization')) {
-        headers.set('Authorization', `Bearer ${token}`);
     }
 
     let response: Response;
@@ -25,6 +20,7 @@ export async function apiFetch<T = unknown>(
         response = await fetch(buildApiUrl(endpoint), {
             ...options,
             headers,
+            credentials: 'include',
         });
     } catch {
         throw new Error('Unable to reach the server right now.');

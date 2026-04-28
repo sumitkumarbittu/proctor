@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Take your assigned OEPS exam with auto-save and proctoring support.">
     <title>Exam — OEPS</title>
-  <script type="module" crossorigin src="/assets/exam-CWaqWE-O.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/utils-DYakDHdb.js">
-  <link rel="modulepreload" crossorigin href="/assets/api-C7FO9LhO.js">
-  <link rel="stylesheet" crossorigin href="/assets/utils-BPN50kxQ.css">
+  <script type="module" crossorigin src="/assets/exam-7da2AsfK.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/utils-DKSetIlA.js">
+  <link rel="modulepreload" crossorigin href="/assets/api-CNE7ZS8Q.js">
+  <link rel="stylesheet" crossorigin href="/assets/utils-CAidHwzd.css">
 </head>
 <body oncontextmenu="return false;">
     <div class="exam-layout">
@@ -21,8 +21,19 @@
                     <p id="live-update-status" class="helper-text">Question changes sync automatically during the attempt.</p>
                 </div>
                 <div class="flex flex-col gap-sm items-center">
+                    <button id="camera-toggle-btn" type="button" class="btn btn-ghost btn-sm camera-toggle" aria-pressed="false">
+                        Enable camera
+                    </button>
                     <span class="badge badge-info" id="question-count">— Questions</span>
                     <p class="helper-text">Answers save automatically while you work.</p>
+                </div>
+            </div>
+
+            <div id="camera-preview-panel" class="camera-preview-panel" hidden>
+                <video id="camera-preview" class="camera-preview" autoplay muted playsinline></video>
+                <div>
+                    <span class="section-title">Live camera preview</span>
+                    <p class="helper-text">Keep your face visible while the attempt is active.</p>
                 </div>
             </div>
 

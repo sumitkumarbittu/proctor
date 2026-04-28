@@ -9,15 +9,15 @@ export function buildApiUrl(endpoint: string): string {
 }
 
 export function getAuthToken(): string | null {
-    return localStorage.getItem('token');
+    return null;
 }
 
-export function setAuthToken(token: string) {
-    localStorage.setItem('token', token);
+export function setAuthToken(_token: string) {
+    return;
 }
 
 export function removeAuthToken() {
-    localStorage.removeItem('token');
+    return;
 }
 
 export function formatTime(totalSeconds: number): string {

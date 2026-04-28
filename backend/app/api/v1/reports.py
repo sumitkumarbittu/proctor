@@ -380,6 +380,7 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
                 "answer": answer,
                 "is_answered": is_answered,
                 "marks_awarded": marks_awarded,
+                "percentage_awarded": _percentage(marks_awarded or 0.0, question.marks),
                 "is_correct": is_correct,
                 "correct_option": question.correct_option if show_correct_answers else None,
             }
@@ -389,6 +390,17 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
     percentage = _percentage(score, max_score)
     mcq_accuracy = _percentage(correct_count, total_mcqs)
     average_subjective = _round(subjective_score / total_subjective) if total_subjective else 0.0
+    evaluated_count = sum(1 for row in question_breakdown if row["marks_awarded"] is not None)
+    proctor_events = [
+        {
+            "id": log.id,
+            "type": log.event_type,
+            "severity": log.severity,
+            "metadata": log.metadata_info,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        }
+        for log in sorted(attempt.logs, key=lambda item: item.created_at or datetime.min)
+    ]
 
     return {
         "attempt": {
@@ -399,6 +411,7 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
             "student_id": attempt.student_id,
             "student_name": attempt.student.name if attempt.student else None,
             "student_email": attempt.student.email if attempt.student else None,
+            "ended_at": attempt.ends_at.isoformat() if attempt.ends_at else None,
         },
         "exam": {
             "id": exam.id if exam else None,
@@ -406,6 +419,7 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
             "status": exam.status.value if exam else None,
             "duration_minutes": exam.duration_minutes if exam else 0,
             "question_count": len(question_breakdown),
+            "max_attempts_per_student": exam.max_attempts_per_student if exam else 1,
         },
         "overview": {
             "score": _round(score),
@@ -413,12 +427,18 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
             "percentage": percentage,
             "answered_count": answered_count,
             "blank_count": blank_count,
+            "evaluated_question_count": evaluated_count,
+            "total_question_count": len(question_breakdown),
             "response_rate": _percentage(answered_count, len(question_breakdown)),
             "total_violations": len(attempt.logs),
             "risk_band": _risk_band(len(attempt.logs)),
             "time_spent_minutes": time_spent_minutes,
             "mcq_accuracy": mcq_accuracy,
             "average_subjective_marks": average_subjective,
+            "correct_count": correct_count,
+            "incorrect_count": max(total_mcqs - correct_count, 0),
+            "total_mcqs": total_mcqs,
+            "total_subjective": total_subjective,
         },
         "performance_breakdown": [
             {"label": "Answered", "count": answered_count},
@@ -427,6 +447,7 @@ def _build_attempt_analytics(attempt: Attempt, current_user: User) -> dict[str, 
             {"label": "Incorrect", "count": max(total_mcqs - correct_count, 0)},
         ],
         "integrity_breakdown": _event_breakdown(attempt.logs),
+        "proctor_events": proctor_events,
         "question_breakdown": question_breakdown,
     }
 

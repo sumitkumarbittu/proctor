@@ -336,6 +336,12 @@
   font-size: 0.85rem;
 }
 
+.stat-card-note {
+  margin-top: 0.65rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
 @media (max-width: 1080px) {
   .auth-shell,
   .dashboard-layout,

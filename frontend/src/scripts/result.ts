@@ -1,5 +1,5 @@
 import { apiFetch } from './api';
-import { escapeHtml, getStatusBadgeClass } from './utils';
+import { escapeHtml, formatDateTimeIst, getStatusBadgeClass } from './utils';
 
 const urlParams = new URLSearchParams(window.location.search);
 const attemptId = urlParams.get('attempt_id');
@@ -12,6 +12,18 @@ function formatPercent(value: number | null | undefined): string {
 function formatValue(value: number | null | undefined): string {
     const safeValue = Number.isFinite(value) ? Number(value) : 0;
     return safeValue.toFixed(1).replace(/\.0$/, '');
+}
+
+function getPerformanceTone(percentage: number) {
+    if (percentage >= 80) return 'Strong';
+    if (percentage >= 50) return 'Developing';
+    return 'Needs review';
+}
+
+function getRiskClass(riskBand: string) {
+    if (riskBand === 'High risk') return 'badge-danger';
+    if (riskBand === 'Flagged') return 'badge-warning';
+    return 'badge-success';
 }
 
 function animateValue(element: HTMLElement, start: number, end: number, duration: number) {
@@ -39,30 +51,22 @@ function renderPerformanceRows(items: Array<{ label: string; count: number }>) {
 
     const maxValue = Math.max(...items.map((item) => item.count), 1);
     return `
-        <div class="card report-panel">
-            <div class="report-panel-header">
-                <div>
-                    <span class="section-title">Attempt Analytics</span>
-                    <h3 class="report-panel-title">Answer quality and completion</h3>
-                </div>
-            </div>
-            <div class="report-bars">
-                ${items
-                    .map(
-                        (item) => `
-                            <div class="report-bar-row">
-                                <div class="report-bar-head">
-                                    <span>${escapeHtml(item.label)}</span>
-                                    <span>${item.count}</span>
-                                </div>
-                                <div class="report-bar-track">
-                                    <div class="report-bar-fill blue" style="width: ${(item.count / maxValue) * 100}%"></div>
-                                </div>
+        <div class="report-bars mt-2">
+            ${items
+                .map(
+                    (item) => `
+                        <div class="report-bar-row">
+                            <div class="report-bar-head">
+                                <span>${escapeHtml(item.label)}</span>
+                                <span>${item.count}</span>
                             </div>
-                        `,
-                    )
-                    .join('')}
-            </div>
+                            <div class="report-bar-track">
+                                <div class="report-bar-fill blue" style="width: ${(item.count / maxValue) * 100}%"></div>
+                            </div>
+                        </div>
+                    `,
+                )
+                .join('')}
         </div>
     `;
 }
@@ -117,71 +121,105 @@ function renderQuestionBreakdown(rows: any[]) {
     }
 
     return `
-        <div class="card report-panel">
+        <div class="card report-panel result-detail-panel">
             <div class="report-panel-header">
                 <div>
                     <span class="section-title">Question Breakdown</span>
-                    <h3 class="report-panel-title">Per-question response summary</h3>
+                    <h3 class="report-panel-title">Per-question evaluation</h3>
                 </div>
             </div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Question</th>
-                        <th>Status</th>
-                        <th>Marks</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rows
-                        .map(
-                            (row) => `
-                                <tr>
-                                    <td class="table-primary">
-                                        Q${row.order} • ${escapeHtml(row.type)}
-                                        <div class="helper-text">${escapeHtml(row.prompt)}</div>
-                                    </td>
-                                    <td>
-                                        <span class="badge ${
-                                            row.is_answered
-                                                ? row.is_correct === true
-                                                    ? 'badge-success'
-                                                    : row.is_correct === false
-                                                      ? 'badge-warning'
-                                                      : 'badge-info'
-                                                : 'badge-danger'
-                                        }">
-                                            ${
-                                                row.is_answered
-                                                    ? row.is_correct === true
-                                                        ? 'Correct'
-                                                        : row.is_correct === false
-                                                          ? 'Answered'
-                                                          : 'Submitted'
-                                                    : 'Blank'
-                                            }
-                                        </span>
-                                    </td>
-                                    <td>${formatValue(row.marks_awarded)}/${formatValue(row.marks)}</td>
-                                    <td>
-                                        ${
-                                            row.correct_option
-                                                ? `<div class="helper-text">Correct: ${escapeHtml(row.correct_option)}</div>`
-                                                : ''
-                                        }
-                                        ${
-                                            row.answer
-                                                ? `<div class="helper-text">Your answer: ${escapeHtml(row.answer)}</div>`
-                                                : '<div class="helper-text">No answer recorded.</div>'
-                                        }
-                                    </td>
-                                </tr>
-                            `,
-                        )
-                        .join('')}
-                </tbody>
-            </table>
+            <div class="result-question-list">
+                ${rows
+                    .map((row) => {
+                        const statusCopy = row.is_answered
+                            ? row.is_correct === true
+                                ? 'Correct'
+                                : row.is_correct === false
+                                  ? 'Answered'
+                                  : 'Submitted'
+                            : 'Blank';
+                        const statusClass = row.is_answered
+                            ? row.is_correct === true
+                                ? 'badge-success'
+                                : row.is_correct === false
+                                  ? 'badge-warning'
+                                  : 'badge-info'
+                            : 'badge-danger';
+                        return `
+                            <article class="result-question-card">
+                                <div class="result-question-head">
+                                    <div>
+                                        <span class="section-title">Q${row.order} • ${escapeHtml(row.type)}</span>
+                                        <h4>${escapeHtml(row.prompt)}</h4>
+                                    </div>
+                                    <span class="badge ${statusClass}">${statusCopy}</span>
+                                </div>
+                                <div class="result-question-score">
+                                    <strong>${formatValue(row.marks_awarded)}/${formatValue(row.marks)}</strong>
+                                    <div class="report-bar-track">
+                                        <div class="report-bar-fill blue" style="width:${Math.min(
+                                            100,
+                                            Math.max(0, row.percentage_awarded || 0),
+                                        )}%"></div>
+                                    </div>
+                                </div>
+                                <div class="result-answer-grid">
+                                    <div>
+                                        <span>Your answer</span>
+                                        <p>${row.answer ? escapeHtml(row.answer) : 'No answer recorded.'}</p>
+                                    </div>
+                                    ${
+                                        row.correct_option
+                                            ? `<div><span>Correct answer</span><p>${escapeHtml(row.correct_option)}</p></div>`
+                                            : ''
+                                    }
+                                </div>
+                            </article>
+                        `;
+                    })
+                    .join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderProctorEvents(events: any[]) {
+    if (!events?.length) {
+        return `
+            <div class="card report-panel result-detail-panel">
+                <span class="section-title">Integrity Timeline</span>
+                <h3 class="report-panel-title">No proctoring events recorded</h3>
+                <p class="helper-text mt-1">The attempt did not record focus, fullscreen, camera, or context warnings.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="card report-panel result-detail-panel">
+            <div class="report-panel-header">
+                <div>
+                    <span class="section-title">Integrity Timeline</span>
+                    <h3 class="report-panel-title">Recorded proctoring events</h3>
+                </div>
+                <span class="badge badge-warning">${events.length} events</span>
+            </div>
+            <div class="result-event-list">
+                ${events
+                    .map(
+                        (event) => `
+                            <div class="result-event-row">
+                                <div>
+                                    <strong>${escapeHtml(event.type || 'Event')}</strong>
+                                    <p class="helper-text">${event.created_at ? formatDateTimeIst(event.created_at) : 'Time unavailable'}</p>
+                                </div>
+                                <span class="badge ${event.severity === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}">${escapeHtml(
+                                    event.severity || 'WARNING',
+                                )}</span>
+                            </div>
+                        `,
+                    )
+                    .join('')}
+            </div>
         </div>
     `;
 }
@@ -268,7 +306,7 @@ async function initResult() {
 
                 badge.textContent = 'EVALUATED';
                 badge.className = 'badge badge-success';
-                message.textContent = `You have completed ${exam.title}.`;
+                message.textContent = `${getPerformanceTone(percentage)} performance in ${exam.title}.`;
 
                 if (percentage >= 90) icon.textContent = '★';
                 else if (percentage >= 70) icon.textContent = '✓';
@@ -287,14 +325,14 @@ async function initResult() {
             kpis.innerHTML = analytics
                 ? `
                     <div class="report-kpi-card">
-                        <span class="report-kpi-label">Answered</span>
-                        <strong class="report-kpi-value">${overview.answered_count || 0}</strong>
-                        <span class="report-kpi-note">${formatPercent(overview.response_rate)} response rate</span>
+                        <span class="report-kpi-label">Score</span>
+                        <strong class="report-kpi-value">${formatPercent(overview.percentage)}</strong>
+                        <span class="report-kpi-note">${formatValue(overview.score)}/${formatValue(overview.max_score)} marks</span>
                     </div>
                     <div class="report-kpi-card">
-                        <span class="report-kpi-label">Flags</span>
-                        <strong class="report-kpi-value">${overview.total_violations || 0}</strong>
-                        <span class="report-kpi-note">${escapeHtml(overview.risk_band || 'Clean')}</span>
+                        <span class="report-kpi-label">Completion</span>
+                        <strong class="report-kpi-value">${formatPercent(overview.response_rate)}</strong>
+                        <span class="report-kpi-note">${overview.answered_count || 0}/${overview.total_question_count || 0} answered</span>
                     </div>
                     <div class="report-kpi-card">
                         <span class="report-kpi-label">Time Spent</span>
@@ -307,24 +345,41 @@ async function initResult() {
                         <span class="report-kpi-note">${analytics.exam?.duration_minutes || 0} minute exam</span>
                     </div>
                     <div class="report-kpi-card">
-                        <span class="report-kpi-label">MCQ Accuracy</span>
-                        <strong class="report-kpi-value">${formatPercent(overview.mcq_accuracy)}</strong>
-                        <span class="report-kpi-note">Subjective avg ${formatValue(
-                            overview.average_subjective_marks,
-                        )}</span>
+                        <span class="report-kpi-label">Integrity</span>
+                        <strong class="report-kpi-value">${overview.total_violations || 0}</strong>
+                        <span class="badge ${getRiskClass(overview.risk_band || 'Clean')}">${escapeHtml(overview.risk_band || 'Clean')}</span>
                     </div>
                 `
                 : '';
 
             performance.innerHTML = analytics
                 ? `
-                    ${renderPerformanceRows(analytics.performance_breakdown || [])}
+                    <div class="result-summary-grid">
+                        <div class="card report-panel result-detail-panel">
+                            <span class="section-title">Evaluation</span>
+                            <h3 class="report-panel-title">Answer quality</h3>
+                            ${renderPerformanceRows(analytics.performance_breakdown || [])}
+                        </div>
+                        <div class="card report-panel result-detail-panel">
+                            <span class="section-title">Question Mix</span>
+                            <h3 class="report-panel-title">Scoring profile</h3>
+                            <div class="result-mini-grid mt-2">
+                                <div><span>MCQ accuracy</span><strong>${formatPercent(overview.mcq_accuracy)}</strong></div>
+                                <div><span>Correct MCQs</span><strong>${overview.correct_count || 0}/${overview.total_mcqs || 0}</strong></div>
+                                <div><span>Subjective avg</span><strong>${formatValue(overview.average_subjective_marks)}</strong></div>
+                                <div><span>Blank</span><strong>${overview.blank_count || 0}</strong></div>
+                            </div>
+                        </div>
+                    </div>
                     ${renderIntegrityRows(analytics.integrity_breakdown || [])}
                 `
                 : '';
 
             breakdown.innerHTML = analytics
-                ? renderQuestionBreakdown(analytics.question_breakdown || [])
+                ? `
+                    ${renderQuestionBreakdown(analytics.question_breakdown || [])}
+                    ${renderProctorEvents(analytics.proctor_events || [])}
+                `
                 : '';
         }, 500);
     } catch {
